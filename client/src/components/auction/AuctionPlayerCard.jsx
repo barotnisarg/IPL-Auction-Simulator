@@ -1,0 +1,159 @@
+// client/src/components/auction/AuctionPlayerCard.jsx
+
+import { useEffect, useState } from 'react';
+import { useSelector } from 'react-redux';
+
+import { formatLakhsAsDisplay } from '../../utils/formatCurrency';
+
+// Mirrored from server/constants/auctionConstants.js — display labels for
+// the same role/category values used throughout this project.
+const ROLE_DISPLAY_LABELS = {
+  batter: 'Batter',
+  'all-rounder': 'All-Rounder',
+  bowler: 'Bowler',
+  wicketkeeper: 'Wicketkeeper',
+};
+
+const CATEGORY_DISPLAY_LABELS = {
+  marquee: 'Marquee',
+  pool1: 'Pool 1',
+  pool2: 'Pool 2',
+  'mini-auction': 'Mini-Auction',
+};
+
+// How long the outcome overlay stays visible after a resolution. See
+// explanation for why this needs its own local timer rather than rendering
+// straight off lastResolvedPlayer.
+const OUTCOME_DISPLAY_MS = 2500;
+
+const PlayerSilhouette = () => (
+  <svg
+    className="h-16 w-16 text-neutral-600"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" />
+  </svg>
+);
+
+const AuctionPlayerCard = () => {
+  const { currentPlayer, currentBidLakhs, highestBidderTeamId, teamSummaries, lastResolvedPlayer } =
+    useSelector((state) => state.auction);
+  const { room } = useSelector((state) => state.room);
+
+  const [visibleOutcome, setVisibleOutcome] = useState(null);
+
+  useEffect(() => {
+    if (!lastResolvedPlayer) {
+      return undefined;
+    }
+
+    setVisibleOutcome(lastResolvedPlayer);
+    const timeoutId = setTimeout(() => setVisibleOutcome(null), OUTCOME_DISPLAY_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [lastResolvedPlayer]);
+
+  const highestBidderName = highestBidderTeamId
+    ? teamSummaries.find((team) => team.teamId === highestBidderTeamId)?.teamName
+    : null;
+
+  const categoryLabel = room ? CATEGORY_DISPLAY_LABELS[room.status] : null;
+  const roleSubPhaseLabel = room?.currentRoleSubPhase
+    ? ROLE_DISPLAY_LABELS[room.currentRoleSubPhase]
+    : null;
+
+  if (!currentPlayer) {
+    return (
+      <div className="flex min-h-[20rem] items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900 p-6">
+        <p className="text-sm text-neutral-500">Waiting for the next player...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900 p-6">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-400">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+          Live
+        </span>
+        {categoryLabel && (
+          <span className="text-xs uppercase tracking-wider text-neutral-500">
+            {categoryLabel}
+            {roleSubPhaseLabel ? ` · ${roleSubPhaseLabel}` : ''}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-6 flex items-center gap-5">
+        <div className="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-xl bg-neutral-800">
+          {currentPlayer.imageUrl ? (
+            <img
+              src={currentPlayer.imageUrl}
+              alt={currentPlayer.name}
+              className="h-full w-full rounded-xl object-cover"
+            />
+          ) : (
+            <PlayerSilhouette />
+          )}
+        </div>
+
+        <div>
+          <p className="text-xl font-bold text-neutral-100">{currentPlayer.name}</p>
+          <p className="text-sm text-neutral-400">
+            {ROLE_DISPLAY_LABELS[currentPlayer.role]}
+            {currentPlayer.country ? ` · ${currentPlayer.country}` : ''}
+          </p>
+          <p className="mt-1 text-xs uppercase tracking-wider text-neutral-500">
+            Base price: {formatLakhsAsDisplay(currentPlayer.basePriceLakhs)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 flex items-end justify-between border-t border-neutral-800 pt-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-neutral-500">Current bid</p>
+          <p className="text-3xl font-black text-amber-400">
+            {formatLakhsAsDisplay(currentBidLakhs)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs uppercase tracking-wider text-neutral-500">Highest bidder</p>
+          <p className="text-sm font-semibold text-neutral-200">
+            {highestBidderName || 'No bids yet'}
+          </p>
+        </div>
+      </div>
+
+      {visibleOutcome && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-950/95">
+          {visibleOutcome.type === 'sold' ? (
+            <>
+              <p className="text-3xl font-black text-amber-400">SOLD!</p>
+              <p className="mt-2 text-lg font-semibold text-neutral-100">
+                {visibleOutcome.player.name}
+              </p>
+              <p className="mt-1 text-sm text-neutral-400">
+                {formatLakhsAsDisplay(visibleOutcome.priceLakhs)} to {visibleOutcome.team.teamName}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-3xl font-black text-neutral-500">UNSOLD</p>
+              <p className="mt-2 text-lg font-semibold text-neutral-100">
+                {visibleOutcome.player.name}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AuctionPlayerCard;

@@ -9,17 +9,10 @@ import { fetchTeamsByRoom } from '../features/team/teamSlice';
 import useSocket from './useSocket';
 import { ROOM_EVENTS } from '../sockets/socketEvents';
 
-// Mirrored from server/constants/roomConstants.js — same convention already
-// used in HostControls.jsx and LobbyPage.jsx.
 const ROOM_STATUS_LOBBY = 'lobby';
 const ROOM_STATUS_UNSOLD_SELECTION = 'unsold-selection';
 const ROOM_STATUS_COMPLETED = 'completed';
 
-// Where this page sends the user once status leaves the "active bidding"
-// set (marquee/pool1/pool2/mini-auction). Lobby is included deliberately —
-// HostControls.jsx renders its Restart button on this very page, and a
-// restart flips status back to "lobby." Everyone watching the auction needs
-// to be bounced back, not just whoever happens to already be on LobbyPage.
 const REDIRECT_BY_STATUS = {
   [ROOM_STATUS_LOBBY]: (roomCode) => `/lobby/${roomCode}`,
   [ROOM_STATUS_UNSOLD_SELECTION]: (roomCode) => `/unsold-selection/${roomCode}`,
@@ -45,15 +38,22 @@ const useAuctionRoom = (roomCode) => {
     }
   }, [room?._id, dispatch]);
 
-  // Re-subscribes this socket to the room's channel even on a connection
-  // that never passed through LobbyPage (a direct link, a refresh mid-
-  // auction). Idempotent server-side, and — same precedent LobbyPage.jsx
-  // already set — there's no LEAVE on unmount; moving between pages
-  // within the same room isn't "leaving" it.
   useEffect(() => {
-    if (socket && roomCode) {
+    if (!socket || !roomCode) return;
+
+    const joinRoom = () => {
       socket.emit(ROOM_EVENTS.JOIN, { roomCode });
+    };
+
+    if (socket.connected) {
+      joinRoom();
     }
+
+    socket.on('connect', joinRoom);
+
+    return () => {
+      socket.off('connect', joinRoom);
+    };
   }, [socket, roomCode]);
 
   useEffect(() => {

@@ -32,6 +32,17 @@ const calculateNextBidLakhs = (currentBidLakhs, basePriceLakhs) => {
 
 const SUBMIT_LOCK_MS = 600;
 
+// Safely compares two ID values that may be a string or a Mongoose-style
+// object with a nested _id. Guards against the case where socket events
+// send userId as a raw ObjectId string while authSlice stores user._id as
+// a plain string — strict === would silently fail and hide the bid button.
+const sameId = (a, b) => {
+  if (!a || !b) return false;
+  const strA = typeof a === 'object' ? String(a._id ?? a) : String(a);
+  const strB = typeof b === 'object' ? String(b._id ?? b) : String(b);
+  return strA === strB;
+};
+
 const BidControls = () => {
   const { socket } = useSocket();
   const { room } = useSelector((state) => state.room);
@@ -42,8 +53,8 @@ const BidControls = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const myTeamRecord = teams.find((team) => team.userId._id === user?._id);
-  const mySummary = teamSummaries.find((summary) => summary.teamId === myTeamRecord?._id);
+  const myTeamRecord = teams.find((team) => sameId(team.userId, user?._id));
+  const mySummary = teamSummaries.find((summary) => sameId(summary.teamId, myTeamRecord?._id));
 
   const budgetRemainingLakhs =
     mySummary?.budgetRemainingLakhs ?? myTeamRecord?.budgetRemainingLakhs ?? 0;
@@ -53,7 +64,7 @@ const BidControls = () => {
     return null;
   }
 
-  const isHighestBidder = highestBidderTeamId === myTeamRecord._id;
+  const isHighestBidder = sameId(highestBidderTeamId, myTeamRecord._id);
   const isSquadFull = squadSize >= MAX_SQUAD_SIZE;
   const nextBidLakhs = calculateNextBidLakhs(currentBidLakhs, currentPlayer.basePriceLakhs);
   const canAfford = budgetRemainingLakhs >= nextBidLakhs;

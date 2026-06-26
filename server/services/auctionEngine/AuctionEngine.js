@@ -7,6 +7,7 @@ const {
   PLAYER_ROLES,
   BOWLING_OPTION_ROLES,
   BID_TIMER_SECONDS,
+  OUTCOME_OVERLAY_MS,
   MAX_SQUAD_SIZE,
   STARTING_BUDGET_LAKHS,
 } = require('../../constants/auctionConstants');
@@ -39,11 +40,6 @@ class AuctionEngine extends EventEmitter {
     this.timerHandle = null;
     this.pausedSecondsRemaining = null;
   }
-
-  // ---------------------------------------------------------------------
-  // Host-triggered actions (called by auctionSocketHandlers.js after it
-  // has already verified the caller is the host)
-  // ---------------------------------------------------------------------
 
   async start() {
     if (this.room.status !== ROOM_STATUS.LOBBY) {
@@ -96,12 +92,8 @@ class AuctionEngine extends EventEmitter {
     this.emit('state-update', this.getStateSnapshot());
   }
 
-  // Wipes every sale, every budget, and the bid log — returns the room to
-  // the Lobby so the host can start over. See explanation below for why
-  // this specific behavior was chosen over alternatives.
   async restart() {
-    this.timerHandle?.stop();
-    this.timerHandle = null;
+    this._stopTimer();
     this.currentPlayer = null;
     this.currentBidLakhs = null;
     this.highestBidderTeamId = null;
@@ -129,11 +121,8 @@ class AuctionEngine extends EventEmitter {
     this.emit('state-update', this.getStateSnapshot());
   }
 
-  // Ends immediately. Whoever is currently up for bid is left unrecorded —
-  // see explanation below.
   async end() {
-    this.timerHandle?.stop();
-    this.timerHandle = null;
+    this._stopTimer();
     this.currentPlayer = null;
 
     this.room.status = ROOM_STATUS.COMPLETED;
@@ -141,10 +130,6 @@ class AuctionEngine extends EventEmitter {
 
     this.emit('ended', this.getStateSnapshot());
   }
-
-  // ---------------------------------------------------------------------
-  // Team-triggered actions
-  // ---------------------------------------------------------------------
 
   async placeBid(teamId) {
     this._assertActivePlayer();
@@ -157,9 +142,6 @@ class AuctionEngine extends EventEmitter {
       highestBidderTeamId: this.highestBidderTeamId,
     });
 
-    // State is mutated synchronously, before any await below. Two bids
-    // arriving back-to-back can't corrupt "who's winning" — by the time
-    // either call yields control, its decision is already committed.
     this.currentBidLakhs = nextBidLakhs;
     this.highestBidderTeamId = team._id;
     this.skippedTeamIds = new Set();
@@ -196,10 +178,6 @@ class AuctionEngine extends EventEmitter {
     await this._checkAutoResolve();
   }
 
-  // ---------------------------------------------------------------------
-  // Public hook for unsoldRoundManager.js (Phase 9)
-  // ---------------------------------------------------------------------
-
   async beginMiniAuction(playerQueue) {
     this.currentCategory = AUCTION_CATEGORIES.MINI_AUCTION;
     this.room.status = AUCTION_CATEGORIES.MINI_AUCTION;
@@ -212,11 +190,6 @@ class AuctionEngine extends EventEmitter {
 
     await this._loadNextPlayer();
   }
-
-  // ---------------------------------------------------------------------
-  // Snapshot builders (public — also used by auctionSocketHandlers.js to
-  // answer a fresh JOIN with current state, not just future broadcasts)
-  // ---------------------------------------------------------------------
 
   getStateSnapshot() {
     return {
@@ -232,11 +205,20 @@ class AuctionEngine extends EventEmitter {
     };
   }
 
-  // ---------------------------------------------------------------------
-  // Internal mechanics
-  // ---------------------------------------------------------------------
+  _stopTimer() {
+    if (this.timerHandle) {
+      this.timerHandle.stop();
+      this.timerHandle = null;
+    }
+  }
 
   _startTimer(durationSeconds) {
+    // Always cancel any in-flight timer before starting a new one.
+    // Without this, each bid stacks another setInterval — they all run
+    // concurrently and the oldest one expires the player regardless of
+    // new bids. This was the "only 5 seconds to bid" bug.
+    this._stopTimer();
+
     this.timerHandle = startCountdown({
       durationSeconds,
       onTick: (secondsRemaining) => {
@@ -280,10 +262,6 @@ class AuctionEngine extends EventEmitter {
     return this.room.auctionLog.map((entry) => entry.playerId);
   }
 
-  // A team is "eligible" to still act on the current player if they have
-  // an open squad slot and can afford the next legal bid. Ineligible teams
-  // are treated as already-skipped for quorum purposes below, so the
-  // auction can never stall waiting on a team that structurally can't act.
   _getEligibleTeamIds() {
     const nextBidLakhs = bidService.calculateNextBidLakhs(
       this.currentBidLakhs,
@@ -295,9 +273,6 @@ class AuctionEngine extends EventEmitter {
       .map((team) => team._id.toString());
   }
 
-  // The "everyone skips" rule: resolves immediately, without waiting for
-  // the timer, once every eligible team other than the current highest
-  // bidder has explicitly skipped at this price level.
   async _checkAutoResolve() {
     if (!this.currentPlayer) {
       return;
@@ -315,17 +290,19 @@ class AuctionEngine extends EventEmitter {
   }
 
   async _resolveCurrentPlayer() {
-    this.timerHandle?.stop();
-    this.timerHandle = null;
+  this.timerHandle?.stop();
+  this.timerHandle = null;
 
-    if (this.currentBidLakhs !== null && this.highestBidderTeamId) {
-      await this._sellCurrentPlayer();
-    } else {
-      await this._markCurrentPlayerUnsold();
-    }
-
-    await this._loadNextPlayer();
+  if (this.currentBidLakhs !== null && this.highestBidderTeamId) {
+    await this._sellCurrentPlayer();
+  } else {
+    await this._markCurrentPlayerUnsold();
   }
+
+  // afterResolution: true tells _loadNextPlayer to delay the timer so it
+  // only starts once the client's outcome overlay has finished showing.
+  await this._loadNextPlayer({ afterResolution: true });
+}
 
   async _sellCurrentPlayer() {
     const team = this.teamsById.get(this.highestBidderTeamId.toString());
@@ -368,20 +345,24 @@ class AuctionEngine extends EventEmitter {
     this.emit('player-unsold', { player: this.currentPlayer });
   }
 
-  async _loadNextPlayer() {
-    const nextPlayer = this._pullFromCurrentQueue();
+  async _loadNextPlayer({ afterResolution = false } = {}) {
+  const nextPlayer = this._pullFromCurrentQueue();
 
-    if (nextPlayer) {
-      await this._beginBiddingOn(nextPlayer);
-      return;
-    }
-
-    const hasMorePhases = await this._advanceToNextPhase();
-
-    if (hasMorePhases) {
-      await this._loadNextPlayer();
-    }
+  if (nextPlayer) {
+    // Delay the timer start only when we just resolved a player (sold/unsold)
+    // — the client is showing its outcome overlay for OUTCOME_OVERLAY_MS and
+    // the countdown must not run during that window. On a fresh auction start
+    // there is no overlay so no delay is needed.
+    await this._beginBiddingOn(nextPlayer, { delayTimer: afterResolution });
+    return;
   }
+
+  const hasMorePhases = await this._advanceToNextPhase();
+
+  if (hasMorePhases) {
+    await this._loadNextPlayer();
+  }
+}
 
   _pullFromCurrentQueue() {
     if (
@@ -392,21 +373,38 @@ class AuctionEngine extends EventEmitter {
       return block && block.queue.length > 0 ? block.queue.shift() : null;
     }
 
-    // Marquee and Mini-Auction: one flat, mixed-role queue.
     return this.queue.length > 0 ? this.queue.shift() : null;
   }
 
-  async _beginBiddingOn(player) {
-    this.currentPlayer = player;
-    this.currentBidLakhs = null;
-    this.highestBidderTeamId = null;
-    this.skippedTeamIds = new Set();
+  async _beginBiddingOn(player, { delayTimer = false } = {}) {
+  this.currentPlayer = player;
+  this.currentBidLakhs = null;
+  this.highestBidderTeamId = null;
+  this.skippedTeamIds = new Set();
 
-    this._startTimer(BID_TIMER_SECONDS);
-    this.emit('state-update', this.getStateSnapshot());
+  // Emit first so the client can render the new player card behind the
+  // outcome overlay immediately (secondsRemaining is null here so the
+  // countdown ring won't show yet — that's intentional).
+  this.emit('state-update', this.getStateSnapshot());
 
-    await this._checkAutoResolve();
+  if (delayTimer) {
+    // Wait for the client's outcome overlay to finish before starting the
+    // countdown. Without this delay the timer runs during the 2.5 s overlay
+    // and users only see the tail end of it once the overlay clears.
+    await new Promise((resolve) => setTimeout(resolve, OUTCOME_OVERLAY_MS));
   }
+
+  this._startTimer(BID_TIMER_SECONDS);
+
+  // Emit again now that secondsRemaining is populated so the countdown
+  // ring snaps to the correct value the instant the overlay clears.
+  this.emit('state-update', this.getStateSnapshot());
+
+  // Do NOT call _checkAutoResolve() here. At the moment a player is first
+  // loaded, no team has taken any action yet — skippedTeamIds is empty and
+  // the "everyone skipped" condition cannot legitimately be true. The only
+  // correct callers are placeBid() and skipBid(), after a team has acted.
+}
 
   async _advanceToNextPhase() {
     if (this.currentCategory === AUCTION_CATEGORIES.MARQUEE) {
@@ -435,7 +433,7 @@ class AuctionEngine extends EventEmitter {
       }
 
       await this._enterUnsoldSelection();
-      return false; // Engine goes idle until Phase 9 calls beginMiniAuction.
+      return false;
     }
 
     if (this.currentCategory === AUCTION_CATEGORIES.MINI_AUCTION) {

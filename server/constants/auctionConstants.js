@@ -51,6 +51,15 @@ const BID_INCREMENT_TIERS = Object.freeze([
 ]);
 
 const BID_TIMER_SECONDS = 7;
+
+// How long the server waits before starting the next player's timer, to
+// match the client-side outcome overlay (OUTCOME_DISPLAY_MS in
+// AuctionPlayerCard.jsx). Without this delay the timer starts immediately
+// after PLAYER_SOLD/PLAYER_UNSOLD is emitted — the overlay hides the
+// countdown for its full 2.5 s, so users only see ~4.5 s of actual bidding
+// time. The delay means the timer only begins once the overlay has cleared.
+const OUTCOME_OVERLAY_MS = 2500;
+
 const UNSOLD_SELECTION_TIMER_SECONDS = 5 * 60; // 5 minutes
 
 module.exports = {
@@ -65,5 +74,6 @@ module.exports = {
   BASE_PRICE_LAKHS,
   BID_INCREMENT_TIERS,
   BID_TIMER_SECONDS,
+  OUTCOME_OVERLAY_MS,
   UNSOLD_SELECTION_TIMER_SECONDS,
 };

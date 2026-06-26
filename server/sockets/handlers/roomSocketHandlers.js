@@ -4,9 +4,11 @@ const { ROOM_EVENTS } = require('../../constants/socketEvents');
 const Room = require('../../models/Room');
 const Team = require('../../models/Team');
 
-// Reused by auctionSocketHandlers.js (Phase 7) whenever Room.status changes
-// (e.g. the host starting the auction) — one place that knows how to fetch
-// and broadcast a fresh room+teams snapshot, not duplicated per handler file.
+// IMPORTANT: .populate('userId', 'name') MUST be kept here. BidControls.jsx
+// identifies the current user's team via team.userId._id === user._id.
+// Without populate, userId arrives as a raw ObjectId string and .userId._id
+// is undefined — myTeamRecord lookup fails and the bid button disappears on
+// every category transition.
 const broadcastRoomUpdate = async (io, roomCode) => {
   const room = await Room.findOne({ roomCode });
 
@@ -14,7 +16,10 @@ const broadcastRoomUpdate = async (io, roomCode) => {
     return;
   }
 
-  const teams = await Team.find({ roomId: room._id }).sort({ createdAt: 1 });
+  const teams = await Team.find({ roomId: room._id })
+    .sort({ createdAt: 1 })
+    .populate('userId', 'name')
+    .populate('squad.playerId', 'name country imageUrl');
 
   io.to(roomCode).emit(ROOM_EVENTS.UPDATED, { room, teams });
 };
@@ -39,6 +44,17 @@ const registerRoomHandlers = (io, socket) => {
       socket.currentRoomCode = normalizedRoomCode;
 
       await broadcastRoomUpdate(io, normalizedRoomCode);
+
+      // If an auction engine is already running for this room, send the
+      // joining client the current auction state immediately. Without this,
+      // a mid-auction page refresh or late-join misses the last STATE_UPDATE
+      // and currentPlayer stays null — the bid button never appears.
+      const auctionStateStore = require('../../services/auctionEngine/auctionStateStore');
+      const engine = auctionStateStore.getEngine(normalizedRoomCode);
+      if (engine) {
+        const { AUCTION_EVENTS } = require('../../constants/socketEvents');
+        socket.emit(AUCTION_EVENTS.STATE_UPDATE, engine.getStateSnapshot());
+      }
     } catch (error) {
       socket.emit(ROOM_EVENTS.ERROR, { message: 'Failed to join room.' });
     }

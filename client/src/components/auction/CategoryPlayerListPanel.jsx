@@ -1,6 +1,5 @@
 // client/src/components/auction/CategoryPlayerListPanel.jsx
 
-import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { formatLakhsAsDisplay } from '../../utils/formatCurrency';
 
@@ -56,8 +55,10 @@ export const CategoryListButton = ({ onClick }) => {
   );
 };
 
-// ── Slide-over panel (full player list with sold/unsold status) ───────────────
-const CategoryPlayerListPanel = ({ isOpen, onClose }) => {
+// ── Slide-over panel ──────────────────────────────────────────────────────────
+// autoCloseCountdown: number (seconds left) when auto-opened at category start,
+// null when opened manually by user (no countdown shown).
+const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null }) => {
   const { activeCategoryPlayers, playerOutcomeMap } = useSelector((s) => s.auction);
 
   if (!isOpen || !activeCategoryPlayers) return null;
@@ -71,6 +72,8 @@ const CategoryPlayerListPanel = ({ isOpen, onClose }) => {
   const unsoldCount  = players.filter((p) => playerOutcomeMap[p._id?.toString()]?.type === 'unsold').length;
   const pendingCount = players.length - soldCount - unsoldCount;
 
+  const isAutoOpen = autoCloseCountdown !== null;
+
   return (
     // Backdrop — click outside to close
     <div
@@ -82,36 +85,47 @@ const CategoryPlayerListPanel = ({ isOpen, onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
           <div>
-            <p className="text-[10px] uppercase tracking-widest text-neutral-500">Current Set</p>
+            <p className="text-[10px] uppercase tracking-widest text-neutral-500">
+              {isAutoOpen ? 'Starting In' : 'Current Set'}
+            </p>
             <p className={`mt-0.5 text-xl font-black ${catTextColor}`}>{catLabel}</p>
           </div>
 
-          {/* Summary chips */}
-          <div className="flex items-center gap-2 mr-3">
-            {soldCount > 0 && (
-              <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-xs font-semibold text-emerald-400">
-                {soldCount} sold
-              </span>
-            )}
-            {unsoldCount > 0 && (
-              <span className="rounded-full bg-neutral-700 px-2 py-0.5 text-xs font-semibold text-neutral-400">
-                {unsoldCount} unsold
-              </span>
-            )}
-            {pendingCount > 0 && (
-              <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-xs font-semibold text-amber-400">
-                {pendingCount} pending
-              </span>
-            )}
-          </div>
+          <div className="flex items-center gap-3">
+            {/* Summary chips */}
+            <div className="flex items-center gap-2">
+              {soldCount > 0 && (
+                <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-xs font-semibold text-emerald-400">
+                  {soldCount} sold
+                </span>
+              )}
+              {unsoldCount > 0 && (
+                <span className="rounded-full bg-neutral-700 px-2 py-0.5 text-xs font-semibold text-neutral-400">
+                  {unsoldCount} unsold
+                </span>
+              )}
+              {pendingCount > 0 && (
+                <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-xs font-semibold text-amber-400">
+                  {pendingCount} pending
+                </span>
+              )}
+            </div>
 
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-100"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+            {/* Countdown ring — only when auto-opened */}
+            {isAutoOpen && (
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-neutral-700 text-sm font-black text-neutral-200">
+                {autoCloseCountdown}
+              </div>
+            )}
+
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-100"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Player list — scrollable */}
@@ -176,9 +190,17 @@ const CategoryPlayerListPanel = ({ isOpen, onClose }) => {
 
         {/* Footer */}
         <div className="border-t border-neutral-800 px-5 py-3 text-center">
-          <p className="text-xs text-neutral-600">
-            Listed alphabetically — not in auction order
-          </p>
+          {isAutoOpen ? (
+            <p className="text-xs text-neutral-500">
+              Auction starts in{' '}
+              <span className="font-bold text-neutral-200">{autoCloseCountdown}s</span>
+              {' '}— or close to begin immediately
+            </p>
+          ) : (
+            <p className="text-xs text-neutral-600">
+              Listed alphabetically — not in auction order
+            </p>
+          )}
         </div>
       </div>
     </div>

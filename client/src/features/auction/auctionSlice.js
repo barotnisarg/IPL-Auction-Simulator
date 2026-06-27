@@ -12,13 +12,13 @@ const initialState = {
   secondsRemaining: null,
   isPaused: false,
   teamSummaries: [],
+  skippedTeamIds: [],
   currentPlayerBidLog: [],
   auctionHistory: [],
   lastResolvedPlayer: null,
 
   // Set when CATEGORY_STARTED fires. Persists for the entire category so
-  // the "View List" panel can always be reopened. Never nulled out — the
-  // panel button and panel both read this field and must stay populated.
+  // the "View List" panel can always be reopened. Never wiped mid-category.
   activeCategoryPlayers: null,
 
   // Outcome of every resolved player, keyed by player._id.toString().
@@ -53,15 +53,15 @@ const auctionSlice = createSlice({
       state.secondsRemaining = payload.secondsRemaining;
       state.isPaused = payload.isPaused;
       state.teamSummaries = payload.teams;
+      // Reset to [] when a new player loads (skippedTeamIds is empty in
+      // that STATE_UPDATE); grows as teams skip the current player.
+      state.skippedTeamIds = payload.skippedTeamIds ?? [];
     },
 
     applyTimerTick: (state, action) => {
       state.secondsRemaining = action.payload.secondsRemaining;
     },
 
-    // Fired when server emits CATEGORY_STARTED (new pool/set begins).
-    // Stores the full player list so both the header button and the
-    // slide-over panel always have data. Never wiped mid-category.
     applyCategoryStarted: (state, action) => {
       const { category, roleSubPhase, players } = action.payload;
       state.activeCategoryPlayers = {

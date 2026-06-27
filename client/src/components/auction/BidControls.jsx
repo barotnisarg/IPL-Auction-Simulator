@@ -32,10 +32,6 @@ const calculateNextBidLakhs = (currentBidLakhs, basePriceLakhs) => {
 
 const SUBMIT_LOCK_MS = 600;
 
-// Safely compares two ID values that may be a string or a Mongoose-style
-// object with a nested _id. Guards against the case where socket events
-// send userId as a raw ObjectId string while authSlice stores user._id as
-// a plain string — strict === would silently fail and hide the bid button.
 const sameId = (a, b) => {
   if (!a || !b) return false;
   const strA = typeof a === 'object' ? String(a._id ?? a) : String(a);
@@ -48,8 +44,14 @@ const BidControls = () => {
   const { room } = useSelector((state) => state.room);
   const { user } = useSelector((state) => state.auth);
   const { teams } = useSelector((state) => state.team);
-  const { currentPlayer, currentBidLakhs, highestBidderTeamId, teamSummaries, isPaused } =
-    useSelector((state) => state.auction);
+  const {
+    currentPlayer,
+    currentBidLakhs,
+    highestBidderTeamId,
+    teamSummaries,
+    skippedTeamIds,
+    isPaused,
+  } = useSelector((state) => state.auction);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -64,13 +66,20 @@ const BidControls = () => {
     return null;
   }
 
+  const myTeamId = myTeamRecord._id?.toString();
   const isHighestBidder = sameId(highestBidderTeamId, myTeamRecord._id);
   const isSquadFull = squadSize >= MAX_SQUAD_SIZE;
   const nextBidLakhs = calculateNextBidLakhs(currentBidLakhs, currentPlayer.basePriceLakhs);
   const canAfford = budgetRemainingLakhs >= nextBidLakhs;
 
+  // Has this user's team already skipped the current player?
+  const iHaveSkipped = skippedTeamIds.includes(myTeamId);
+  // Total teams that skipped — shown as badge on the button.
+  const skipCount = skippedTeamIds.length;
+
   const canBid = !isPaused && !isHighestBidder && !isSquadFull && canAfford && !isSubmitting;
-  const canSkip = !isPaused && !isHighestBidder && !isSubmitting;
+  // Once skipped you can't un-skip; highest bidder can't skip either.
+  const canSkip = !isPaused && !isHighestBidder && !iHaveSkipped && !isSubmitting;
 
   const emitAndLock = (eventName) => {
     setIsSubmitting(true);
@@ -96,6 +105,7 @@ const BidControls = () => {
       </div>
 
       <div className="mt-4 flex gap-3">
+        {/* Bid button */}
         <Button
           onClick={() => emitAndLock(AUCTION_EVENTS.PLACE_BID)}
           disabled={!canBid}
@@ -104,18 +114,36 @@ const BidControls = () => {
         >
           Bid {formatLakhsAsDisplay(nextBidLakhs)}
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => emitAndLock(AUCTION_EVENTS.SKIP_BID)}
-          disabled={!canSkip}
-          size="lg"
-        >
-          Skip
-        </Button>
+
+        {/* Skip button — turns red + says "Skipped" once this team skips.
+            Badge on top-right shows how many teams total have skipped. */}
+        <div className="relative">
+          <Button
+            variant={iHaveSkipped ? 'danger' : 'secondary'}
+            onClick={() => emitAndLock(AUCTION_EVENTS.SKIP_BID)}
+            disabled={!canSkip}
+            size="lg"
+          >
+            {iHaveSkipped ? 'Skipped' : 'Skip'}
+          </Button>
+
+          {skipCount > 0 && (
+            <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-md">
+              {skipCount}
+            </span>
+          )}
+        </div>
       </div>
 
       {disabledReason && (
         <p className="mt-3 text-center text-xs text-neutral-500">{disabledReason}</p>
+      )}
+
+      {/* Skip context — visible to everyone once any team skips */}
+      {skipCount > 0 && (
+        <p className="mt-2 text-center text-xs text-red-400">
+          {skipCount} {skipCount === 1 ? 'team has' : 'teams have'} skipped this player
+        </p>
       )}
     </div>
   );

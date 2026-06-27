@@ -231,20 +231,23 @@ class AuctionEngine extends EventEmitter {
   // ─────────────────────────────────────────────────────────────────────────
 
   getStateSnapshot() {
-    return {
-      roomId: this.room._id,
-      status: this.room.status,
-      currentRoleSubPhase: this.currentRoleSubPhase,
-      currentPlayer: this.currentPlayer,
-      currentBidLakhs: this.currentBidLakhs,
-      highestBidderTeamId: this.highestBidderTeamId,
-      secondsRemaining: this.timerHandle
-        ? this.timerHandle.getSecondsRemaining()
-        : null,
-      isPaused: this.isPaused,
-      teams: this._getTeamSummaries(),
-    };
-  }
+  return {
+    roomId: this.room._id,
+    status: this.room.status,
+    currentRoleSubPhase: this.currentRoleSubPhase,
+    currentPlayer: this.currentPlayer,
+    currentBidLakhs: this.currentBidLakhs,
+    highestBidderTeamId: this.highestBidderTeamId,
+    secondsRemaining: this.timerHandle
+      ? this.timerHandle.getSecondsRemaining()
+      : null,
+    isPaused: this.isPaused,
+    teams: this._getTeamSummaries(),
+    // Expose which teams have skipped the current player so the client
+    // can show skip count and highlight the user's own Skip button in red.
+    skippedTeamIds: Array.from(this.skippedTeamIds),
+  };
+}
 
   // ─────────────────────────────────────────────────────────────────────────
   // Timer helpers

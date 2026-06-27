@@ -60,6 +60,11 @@ const BID_TIMER_SECONDS = 7;
 // time. The delay means the timer only begins once the overlay has cleared.
 const OUTCOME_OVERLAY_MS = 2500;
 
+// How long the server waits before starting the FIRST player's timer when
+// a brand-new category begins. Users need time to check the player list.
+// Subsequent players within the same category use OUTCOME_OVERLAY_MS.
+const CATEGORY_INTRO_MS = 5000;
+
 const UNSOLD_SELECTION_TIMER_SECONDS = 5 * 60; // 5 minutes
 
 module.exports = {
@@ -75,5 +80,6 @@ module.exports = {
   BID_INCREMENT_TIERS,
   BID_TIMER_SECONDS,
   OUTCOME_OVERLAY_MS,
+  CATEGORY_INTRO_MS,
   UNSOLD_SELECTION_TIMER_SECONDS,
 };

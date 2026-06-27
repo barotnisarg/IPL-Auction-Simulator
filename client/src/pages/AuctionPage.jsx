@@ -10,6 +10,8 @@ import BidControls from '../components/auction/BidControls';
 import HistoryPanel from '../components/auction/HistoryPanel';
 import MyTeamPanel from '../components/auction/MyTeamPanel';
 import OtherTeamsPanel from '../components/auction/OtherTeamsPanel';
+import CategoryIntroModal from '../components/auction/CategoryIntroModal';
+import CategoryPlayerListPanel from '../components/auction/CategoryPlayerListPanel';
 
 const AuctionPage = () => {
   const { roomCode } = useParams();
@@ -30,18 +32,18 @@ const AuctionPage = () => {
     );
   }
 
-  if (!room) {
-    return null;
-  }
+  if (!room) return null;
 
   return (
     <div className="mx-auto min-h-screen max-w-6xl px-4 py-6">
+      <CategoryIntroModal />
       <HostControls />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <AuctionPlayerCard />
           <BidControls />
+          <CategoryPlayerListPanel />
           <HistoryPanel type="bid" />
         </div>
 

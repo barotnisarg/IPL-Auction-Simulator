@@ -16,10 +16,12 @@ const initialState = {
   auctionHistory: [],
   lastResolvedPlayer: null,
 
-  // Category intro modal data — set whenever a new pool/set starts.
-  activeCategoryIntro: null,
+  // Set when CATEGORY_STARTED fires. Persists for the entire category so
+  // the "View List" panel can always be reopened. Never nulled out — the
+  // panel button and panel both read this field and must stay populated.
+  activeCategoryPlayers: null,
 
-  // Tracks outcome of every player resolved so far, keyed by player._id.
+  // Outcome of every resolved player, keyed by player._id.toString().
   // Value: { type: 'sold'|'unsold', teamName?, priceLakhs? }
   playerOutcomeMap: {},
 };
@@ -57,13 +59,16 @@ const auctionSlice = createSlice({
       state.secondsRemaining = action.payload.secondsRemaining;
     },
 
+    // Fired when server emits CATEGORY_STARTED (new pool/set begins).
+    // Stores the full player list so both the header button and the
+    // slide-over panel always have data. Never wiped mid-category.
     applyCategoryStarted: (state, action) => {
       const { category, roleSubPhase, players } = action.payload;
-      state.activeCategoryIntro = { category, roleSubPhase, players: players ?? [] };
-    },
-
-    dismissCategoryIntro: (state) => {
-      state.activeCategoryIntro = null;
+      state.activeCategoryPlayers = {
+        category,
+        roleSubPhase,
+        players: players ?? [],
+      };
     },
 
     recordPlayerSold: (state, action) => {
@@ -99,7 +104,6 @@ export const {
   applyStateUpdate,
   applyTimerTick,
   applyCategoryStarted,
-  dismissCategoryIntro,
   recordPlayerSold,
   recordPlayerUnsold,
 } = auctionSlice.actions;

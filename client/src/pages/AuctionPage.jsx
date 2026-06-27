@@ -1,5 +1,6 @@
 // client/src/pages/AuctionPage.jsx
 
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import useAuctionRoom from '../hooks/useAuctionRoom';
@@ -10,12 +11,14 @@ import BidControls from '../components/auction/BidControls';
 import HistoryPanel from '../components/auction/HistoryPanel';
 import MyTeamPanel from '../components/auction/MyTeamPanel';
 import OtherTeamsPanel from '../components/auction/OtherTeamsPanel';
-import CategoryIntroModal from '../components/auction/CategoryIntroModal';
-import CategoryPlayerListPanel from '../components/auction/CategoryPlayerListPanel';
+import CategoryPlayerListPanel, {
+  CategoryListButton,
+} from '../components/auction/CategoryPlayerListPanel';
 
 const AuctionPage = () => {
   const { roomCode } = useParams();
   const { room, roomStatus } = useAuctionRoom(roomCode);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   if (roomStatus === 'loading' && !room) {
     return <Loader fullScreen label="Loading auction..." />;
@@ -36,14 +39,22 @@ const AuctionPage = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-6xl px-4 py-6">
-      <CategoryIntroModal />
-      <HostControls />
+      {/* Slide-over panel — rendered outside grid, full-screen overlay */}
+      <CategoryPlayerListPanel
+        isOpen={isPanelOpen}
+        onClose={() => setIsPanelOpen(false)}
+      />
+
+      {/* Top bar: host controls on left, pool list button on right */}
+      <div className="flex items-center justify-between gap-4">
+        <HostControls />
+        <CategoryListButton onClick={() => setIsPanelOpen(true)} />
+      </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <AuctionPlayerCard />
           <BidControls />
-          <CategoryPlayerListPanel />
           <HistoryPanel type="bid" />
         </div>
 

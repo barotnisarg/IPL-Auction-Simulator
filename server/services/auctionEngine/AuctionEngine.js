@@ -44,15 +44,8 @@ class AuctionEngine extends EventEmitter {
     this.timerHandle = null;
     this.pausedSecondsRemaining = null;
 
-    // Cached for late-joiners: when a client connects mid-auction they
-    // missed the one-time CATEGORY_STARTED event. roomSocketHandlers sends
-    // this snapshot on JOIN so the player list panel initialises correctly.
     this.lastCategorySnapshot = null;
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Host-triggered actions
-  // ─────────────────────────────────────────────────────────────────────────
 
   async start() {
     if (this.room.status !== ROOM_STATUS.LOBBY) {
@@ -152,10 +145,6 @@ class AuctionEngine extends EventEmitter {
     this.emit("ended", this.getStateSnapshot());
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Team-triggered actions
-  // ─────────────────────────────────────────────────────────────────────────
-
   async placeBid(teamId) {
     this._assertActivePlayer();
 
@@ -208,10 +197,6 @@ class AuctionEngine extends EventEmitter {
     await this._checkAutoResolve();
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Public hook for unsoldRoundManager.js
-  // ─────────────────────────────────────────────────────────────────────────
-
   async beginMiniAuction(playerQueue) {
     this.currentCategory = AUCTION_CATEGORIES.MINI_AUCTION;
     this.room.status = AUCTION_CATEGORIES.MINI_AUCTION;
@@ -226,32 +211,22 @@ class AuctionEngine extends EventEmitter {
     await this._loadNextPlayer({ afterCategoryIntro: true });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Snapshot (public — used by roomSocketHandlers on JOIN to resync clients)
-  // ─────────────────────────────────────────────────────────────────────────
-
   getStateSnapshot() {
-  return {
-    roomId: this.room._id,
-    status: this.room.status,
-    currentRoleSubPhase: this.currentRoleSubPhase,
-    currentPlayer: this.currentPlayer,
-    currentBidLakhs: this.currentBidLakhs,
-    highestBidderTeamId: this.highestBidderTeamId,
-    secondsRemaining: this.timerHandle
-      ? this.timerHandle.getSecondsRemaining()
-      : null,
-    isPaused: this.isPaused,
-    teams: this._getTeamSummaries(),
-    // Expose which teams have skipped the current player so the client
-    // can show skip count and highlight the user's own Skip button in red.
-    skippedTeamIds: Array.from(this.skippedTeamIds),
-  };
-}
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Timer helpers
-  // ─────────────────────────────────────────────────────────────────────────
+    return {
+      roomId: this.room._id,
+      status: this.room.status,
+      currentRoleSubPhase: this.currentRoleSubPhase,
+      currentPlayer: this.currentPlayer,
+      currentBidLakhs: this.currentBidLakhs,
+      highestBidderTeamId: this.highestBidderTeamId,
+      secondsRemaining: this.timerHandle
+        ? this.timerHandle.getSecondsRemaining()
+        : null,
+      isPaused: this.isPaused,
+      teams: this._getTeamSummaries(),
+      skippedTeamIds: Array.from(this.skippedTeamIds),
+    };
+  }
 
   _stopTimer() {
     if (this.timerHandle) {
@@ -261,10 +236,6 @@ class AuctionEngine extends EventEmitter {
   }
 
   _startTimer(durationSeconds) {
-    // Always cancel any in-flight timer before starting a new one.
-    // Without this, each bid stacks another setInterval — they all run
-    // concurrently and the oldest one expires the player regardless of
-    // new bids.
     this._stopTimer();
 
     this.timerHandle = startCountdown({
@@ -279,10 +250,6 @@ class AuctionEngine extends EventEmitter {
       },
     });
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Guards
-  // ─────────────────────────────────────────────────────────────────────────
 
   _assertActivePlayer() {
     if (!this.currentPlayer) {
@@ -329,10 +296,6 @@ class AuctionEngine extends EventEmitter {
       .map((team) => team._id.toString());
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Core auction loop
-  // ─────────────────────────────────────────────────────────────────────────
-
   async _checkAutoResolve() {
     if (!this.currentPlayer) {
       return;
@@ -360,8 +323,6 @@ class AuctionEngine extends EventEmitter {
       await this._markCurrentPlayerUnsold();
     }
 
-    // afterResolution: true — next player's timer waits OUTCOME_OVERLAY_MS
-    // so the sold/unsold overlay finishes before the countdown starts.
     await this._loadNextPlayer({ afterResolution: true });
   }
 
@@ -406,9 +367,6 @@ class AuctionEngine extends EventEmitter {
     this.emit("player-unsold", { player: this.currentPlayer });
   }
 
-  // afterResolution  → wait OUTCOME_OVERLAY_MS before starting timer
-  // afterCategoryIntro → wait CATEGORY_INTRO_MS before starting timer
-  // neither           → start timer immediately (role-block transitions)
   async _loadNextPlayer({
     afterResolution = false,
     afterCategoryIntro = false,
@@ -416,6 +374,17 @@ class AuctionEngine extends EventEmitter {
     const nextPlayer = this._pullFromCurrentQueue();
 
     if (nextPlayer) {
+      // Broadcast a fresh category snapshot marking THIS player as the live
+      // one being auctioned. The client merges this into its existing list
+      // (rather than replacing it), so:
+      //  - The very first player of the pool gets an explicit "live" marker
+      //    instead of just silently appearing as currentPlayer with no
+      //    indication in the list itself.
+      //  - Every player who already finished earlier in this pool stays in
+      //    the list with their sold/unsold result, instead of disappearing
+      //    the moment the next player's snapshot is sent.
+      this._emitCategoryUpdate(nextPlayer);
+
       await this._beginBiddingOn(nextPlayer, {
         afterResolution,
         afterCategoryIntro,
@@ -430,6 +399,17 @@ class AuctionEngine extends EventEmitter {
     // prevent this caller from also calling _loadNextPlayer and double-
     // loading the first player.
     await this._advanceToNextPhase();
+  }
+
+  // Emits a category-started update carrying ONLY the still-pending players
+  // plus the one now live (marked isCurrentlyAuctioning: true). This is
+  // intentionally a partial list — the client's applyCategoryStarted reducer
+  // merges it into the existing roster by _id rather than replacing it, so
+  // players who already sold/went unsold earlier in this pool are preserved.
+  _emitCategoryUpdate(currentlyAuctioning) {
+    const snapshot = this._getCategorySnapshot(currentlyAuctioning);
+    this.lastCategorySnapshot = snapshot;
+    this.emit("category-started", snapshot);
   }
 
   _pullFromCurrentQueue() {
@@ -453,35 +433,17 @@ class AuctionEngine extends EventEmitter {
     this.highestBidderTeamId = null;
     this.skippedTeamIds = new Set();
 
-    // Broadcast the new player immediately so clients can render the card
-    // behind any overlay. secondsRemaining is null here so the countdown
-    // ring stays hidden — intentional.
     this.emit("state-update", this.getStateSnapshot());
 
     if (afterCategoryIntro) {
-      // Brand-new category just started. Wait CATEGORY_INTRO_MS so users
-      // have time to check the player list before bidding begins.
       await new Promise((resolve) => setTimeout(resolve, CATEGORY_INTRO_MS));
     } else if (afterResolution) {
-      // Previous player was just resolved. Wait OUTCOME_OVERLAY_MS so the
-      // sold/unsold overlay finishes before the next countdown starts.
       await new Promise((resolve) => setTimeout(resolve, OUTCOME_OVERLAY_MS));
     }
 
     this._startTimer(BID_TIMER_SECONDS);
-
-    // Second emit — countdown ring snaps to full value the instant any
-    // overlay clears on the client.
     this.emit("state-update", this.getStateSnapshot());
-
-    // Do NOT call _checkAutoResolve() here. No team has acted yet so the
-    // "everyone skipped" condition cannot legitimately be true. Only
-    // placeBid() and skipBid() are the correct callers.
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Phase transitions
-  // ─────────────────────────────────────────────────────────────────────────
 
   async _advanceToNextPhase() {
     if (this.currentCategory === AUCTION_CATEGORIES.MARQUEE) {
@@ -515,7 +477,6 @@ class AuctionEngine extends EventEmitter {
         return;
       }
 
-      // No more players — hand off to the unsold selection screen.
       await this._enterUnsoldSelection();
       return;
     }
@@ -594,10 +555,6 @@ class AuctionEngine extends EventEmitter {
     this.emit("ended", this.getStateSnapshot());
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Snapshot helpers
-  // ─────────────────────────────────────────────────────────────────────────
-
   _getTeamSummaries() {
     return Array.from(this.teamsById.values()).map((team) => {
       const bowlingOptionsCount = team.squad.filter((entry) =>
@@ -618,10 +575,14 @@ class AuctionEngine extends EventEmitter {
     });
   }
 
-  _getCategorySnapshot() {
+  _getCategorySnapshot(currentlyAuctioning = null) {
     // Build the player list for the category player-list panel.
     // For Pool 1/2 we flatten ALL role blocks so the panel shows every
-    // player in the full pool, not just the current role sub-phase.
+    // STILL-PENDING player in the full pool, not just the current role
+    // sub-phase. Players already shifted out (resolved, or currently being
+    // auctioned) are NOT in these queues anymore — that's expected, since
+    // the client merges this against its existing roster rather than
+    // replacing it (see applyCategoryStarted in auctionSlice.js).
     let players = [];
 
     if (
@@ -637,9 +598,18 @@ class AuctionEngine extends EventEmitter {
       players = this.queue.map((p) => this._playerSummary(p));
     }
 
+    // Explicitly include the player currently up for auction, marked live.
+    // They were already shift()ed out of the queue by this point, so without
+    // this they would be missing from this particular snapshot entirely.
+    const livePlayer = currentlyAuctioning ?? this.currentPlayer;
+    if (livePlayer) {
+      const summary = this._playerSummary(livePlayer);
+      summary.isCurrentlyAuctioning = true;
+      players.push(summary);
+    }
+
     // Sort alphabetically — never expose the shuffled queue order to clients
-    // (Bug 3 fix: users could predict who's next if the list matched the
-    // queue order).
+    // (users could predict who's next if the list matched the queue order).
     players.sort((a, b) => a.name.localeCompare(b.name));
 
     return {

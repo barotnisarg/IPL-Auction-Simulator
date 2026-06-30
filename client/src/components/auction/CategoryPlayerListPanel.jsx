@@ -31,7 +31,6 @@ const CATEGORY_COLOR = {
   'mini-auction': 'text-emerald-400 border-emerald-400/40',
 };
 
-// ── Trigger button (rendered in AuctionPage header) ───────────────────────────
 export const CategoryListButton = ({ onClick }) => {
   const { activeCategoryPlayers, playerOutcomeMap } = useSelector((s) => s.auction);
 
@@ -55,7 +54,6 @@ export const CategoryListButton = ({ onClick }) => {
   );
 };
 
-// ── Slide-over panel ──────────────────────────────────────────────────────────
 // autoCloseCountdown: number (seconds left) when auto-opened at category start,
 // null when opened manually by user (no countdown shown).
 const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null }) => {
@@ -75,14 +73,12 @@ const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null })
   const isAutoOpen = autoCloseCountdown !== null;
 
   return (
-    // Backdrop — click outside to close
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-neutral-950/70 px-4 backdrop-blur-sm sm:items-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="flex w-full max-w-md flex-col rounded-t-2xl border border-neutral-800 bg-neutral-900 shadow-2xl sm:rounded-2xl max-h-[85vh]">
 
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-neutral-500">
@@ -92,7 +88,6 @@ const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null })
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Summary chips */}
             <div className="flex items-center gap-2">
               {soldCount > 0 && (
                 <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-xs font-semibold text-emerald-400">
@@ -111,7 +106,6 @@ const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null })
               )}
             </div>
 
-            {/* Countdown ring — only when auto-opened */}
             {isAutoOpen && (
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-neutral-700 text-sm font-black text-neutral-200">
                 {autoCloseCountdown}
@@ -128,7 +122,6 @@ const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null })
           </div>
         </div>
 
-        {/* Player list — scrollable */}
         <div className="overflow-y-auto px-4 py-3">
           {players.length === 0 ? (
             <p className="py-8 text-center text-sm text-neutral-500">No players in this set.</p>
@@ -136,21 +129,36 @@ const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null })
             <ul className="space-y-1">
               {players.map((player) => {
                 const outcome = playerOutcomeMap[player._id?.toString()];
-                const isResolved = Boolean(outcome);
+                const isLive = Boolean(player.isCurrentlyAuctioning);
+                const isResolved = Boolean(outcome) && !isLive;
 
                 return (
                   <li
                     key={player._id}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${isResolved ? 'opacity-60' : 'hover:bg-neutral-800/50'}`}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 ${
+                      isLive
+                        ? 'bg-amber-500/10 ring-1 ring-amber-500/30'
+                        : isResolved
+                        ? 'opacity-60'
+                        : 'hover:bg-neutral-800/50'
+                    }`}
                   >
-                    {/* Role pill */}
+                    {isLive && (
+                      <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
+                    )}
+
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${ROLE_COLOR[player.role] ?? 'text-neutral-400 bg-neutral-700'}`}>
                       {ROLE_LABEL[player.role] ?? player.role}
                     </span>
 
-                    {/* Name + country */}
                     <div className="min-w-0 flex-1">
-                      <p className={`truncate text-sm font-semibold ${isResolved ? 'text-neutral-400 line-through decoration-neutral-600' : 'text-neutral-100'}`}>
+                      <p className={`truncate text-sm font-semibold ${
+                        isLive
+                          ? 'text-amber-300'
+                          : isResolved
+                          ? 'text-neutral-400 line-through decoration-neutral-600'
+                          : 'text-neutral-100'
+                      }`}>
                         {player.name}
                       </p>
                       {player.country && (
@@ -158,14 +166,19 @@ const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null })
                       )}
                     </div>
 
-                    {/* Right: outcome or base price */}
-                    {!outcome && (
+                    {isLive && (
+                      <span className="ml-auto shrink-0 text-xs font-bold uppercase tracking-wide text-amber-400">
+                        Live
+                      </span>
+                    )}
+
+                    {!isLive && !outcome && (
                       <span className="shrink-0 text-xs text-neutral-500">
                         {formatLakhsAsDisplay(player.basePriceLakhs)}
                       </span>
                     )}
 
-                    {outcome?.type === 'sold' && (
+                    {!isLive && outcome?.type === 'sold' && (
                       <div className="ml-auto flex flex-col items-end gap-0.5 shrink-0">
                         <span className="text-sm font-black text-emerald-400">
                           {formatLakhsAsDisplay(outcome.priceLakhs)}
@@ -176,7 +189,7 @@ const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null })
                       </div>
                     )}
 
-                    {outcome?.type === 'unsold' && (
+                    {!isLive && outcome?.type === 'unsold' && (
                       <span className="ml-auto shrink-0 text-xs font-semibold uppercase tracking-wide text-neutral-500">
                         Unsold
                       </span>
@@ -188,7 +201,6 @@ const CategoryPlayerListPanel = ({ isOpen, onClose, autoCloseCountdown = null })
           )}
         </div>
 
-        {/* Footer */}
         <div className="border-t border-neutral-800 px-5 py-3 text-center">
           {isAutoOpen ? (
             <p className="text-xs text-neutral-500">

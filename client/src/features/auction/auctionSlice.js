@@ -64,10 +64,56 @@ const auctionSlice = createSlice({
 
     applyCategoryStarted: (state, action) => {
       const { category, roleSubPhase, players } = action.payload;
+      const incomingPlayers = players ?? [];
+
+      const isNewCategory = state.activeCategoryPlayers?.category !== category;
+
+      if (isNewCategory) {
+        // Brand-new pool/set — full reset. These are genuinely different
+        // players from a different pool, so replacing is correct here.
+        state.activeCategoryPlayers = {
+          category,
+          roleSubPhase,
+          players: incomingPlayers,
+        };
+        return;
+      }
+
+      // Same category as before — MERGE instead of replace.
+      // The server's per-player update only includes still-pending players
+      // plus the one currently live; it does NOT re-send players who already
+      // sold/went unsold earlier in this pool (they were already shifted out
+      // of its internal queue). Replacing the list wholesale would silently
+      // drop every already-resolved player from the panel the moment the
+      // next player's update arrives — that was the "player disappears after
+      // their auction finishes" bug. Merging by _id keeps everyone visible
+      // for the entire pool; sold/unsold status comes separately from
+      // playerOutcomeMap and is unaffected by this merge.
+      const existingById = new Map(
+        (state.activeCategoryPlayers?.players ?? []).map((p) => [p._id?.toString(), p])
+      );
+
+      for (const incoming of incomingPlayers) {
+        existingById.set(incoming._id?.toString(), incoming);
+      }
+
+      // Only the player marked live in THIS incoming batch should stay
+      // marked live — clear the flag on everyone else (e.g. the previous
+      // player, now resolved, should lose their "Live" badge).
+      const incomingLiveId = incomingPlayers
+        .find((p) => p.isCurrentlyAuctioning)?._id?.toString();
+
+      const mergedPlayers = Array.from(existingById.values())
+        .map((p) => ({
+          ...p,
+          isCurrentlyAuctioning: p._id?.toString() === incomingLiveId,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
       state.activeCategoryPlayers = {
         category,
-        roleSubPhase,
-        players: players ?? [],
+        roleSubPhase: roleSubPhase ?? state.activeCategoryPlayers.roleSubPhase,
+        players: mergedPlayers,
       };
     },
 

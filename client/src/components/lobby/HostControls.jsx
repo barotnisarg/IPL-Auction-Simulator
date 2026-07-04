@@ -8,46 +8,36 @@ import { AUCTION_EVENTS } from '../../sockets/socketEvents';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 
-// Mirrored from server/constants/roomConstants.js — no shared package across
-// the client/server boundary, kept in sync by hand.
-const ROOM_STATUS_LOBBY = 'lobby';
+const ROOM_STATUS_LOBBY     = 'lobby';
 const ROOM_STATUS_COMPLETED = 'completed';
-const MIN_PLAYERS_PER_ROOM = 2;
+const MIN_PLAYERS_PER_ROOM  = 2;
 
 const HostControls = () => {
-  const { socket } = useSocket();
-  const { room } = useSelector((state) => state.room);
-  const { user } = useSelector((state) => state.auth);
-  const { teams } = useSelector((state) => state.team);
-  // Fixed here as the contract auctionSlice.js (Phase 7) will satisfy:
-  // a single boolean for whether the live engine is currently paused.
-  const isPaused = useSelector((state) => state.auction?.isPaused ?? false);
+  const { socket }  = useSocket();
+  const { room }    = useSelector((state) => state.room);
+  const { user }    = useSelector((state) => state.auth);
+  const { teams }   = useSelector((state) => state.team);
+  const isPaused    = useSelector((state) => state.auction?.isPaused ?? false);
 
-  const [confirmAction, setConfirmAction] = useState(null); // null | 'restart' | 'end'
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const isHost = Boolean(room) && Boolean(user) && room.hostUserId === user._id;
+  if (!isHost || !room || room.status === ROOM_STATUS_COMPLETED) return null;
 
-  if (!isHost || !room || room.status === ROOM_STATUS_COMPLETED) {
-    return null;
-  }
+  const emit = (eventName) => socket.emit(eventName, { roomCode: room.roomCode });
 
-  const emit = (eventName) => {
-    socket.emit(eventName, { roomCode: room.roomCode });
-  };
-
+  /* ── Lobby view: start button ── */
   if (room.status === ROOM_STATUS_LOBBY) {
     const canStart = teams.length >= MIN_PLAYERS_PER_ROOM;
 
     return (
-      <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-center">
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-neutral-500">
-          Host Controls
-        </h2>
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+        <h2 className="text-sm font-bold text-neutral-100">Host Controls</h2>
 
-        <p className="mt-3 text-sm text-neutral-400">
+        <p className="mt-1.5 text-sm text-neutral-500">
           {canStart
-            ? `${teams.length} franchises ready. You can start the auction whenever you like.`
-            : `Waiting for at least ${MIN_PLAYERS_PER_ROOM} franchises to join (${teams.length}/${MIN_PLAYERS_PER_ROOM}).`}
+            ? `${teams.length} franchise${teams.length !== 1 ? 's' : ''} ready — start whenever you like.`
+            : `Need at least ${MIN_PLAYERS_PER_ROOM} franchises to start (${teams.length}/${MIN_PLAYERS_PER_ROOM} joined).`}
         </p>
 
         <Button
@@ -62,32 +52,31 @@ const HostControls = () => {
     );
   }
 
+  /* ── In-auction view: pause / restart / end ── */
   return (
     <>
-      <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
-          Host Controls
-        </h2>
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
+        <span className="mr-auto text-xs font-semibold uppercase tracking-widest text-neutral-600">
+          Host
+        </span>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          {isPaused ? (
-            <Button size="sm" onClick={() => emit(AUCTION_EVENTS.RESUME)}>
-              Resume
-            </Button>
-          ) : (
-            <Button size="sm" variant="secondary" onClick={() => emit(AUCTION_EVENTS.PAUSE)}>
-              Pause
-            </Button>
-          )}
-
-          <Button size="sm" variant="secondary" onClick={() => setConfirmAction('restart')}>
-            Restart
+        {isPaused ? (
+          <Button size="sm" onClick={() => emit(AUCTION_EVENTS.RESUME)}>
+            Resume
           </Button>
-
-          <Button size="sm" variant="danger" onClick={() => setConfirmAction('end')}>
-            End Auction
+        ) : (
+          <Button size="sm" variant="secondary" onClick={() => emit(AUCTION_EVENTS.PAUSE)}>
+            Pause
           </Button>
-        </div>
+        )}
+
+        <Button size="sm" variant="secondary" onClick={() => setConfirmAction('restart')}>
+          Restart
+        </Button>
+
+        <Button size="sm" variant="danger" onClick={() => setConfirmAction('end')}>
+          End
+        </Button>
       </div>
 
       <Modal
@@ -96,13 +85,13 @@ const HostControls = () => {
         title={confirmAction === 'restart' ? 'Restart the auction?' : 'End the auction?'}
         size="sm"
       >
-        <p className="text-sm text-neutral-400">
+        <p className="text-sm leading-relaxed text-neutral-400">
           {confirmAction === 'restart'
-            ? 'This resets every sale and every budget back to the start. This cannot be undone.'
-            : 'This ends the auction immediately and locks in the current results. This cannot be undone.'}
+            ? 'This resets every sale and every budget back to zero. It cannot be undone.'
+            : 'This ends the auction immediately and locks in the current results. It cannot be undone.'}
         </p>
 
-        <div className="mt-5 flex justify-end gap-3">
+        <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)}>
             Cancel
           </Button>
@@ -114,7 +103,7 @@ const HostControls = () => {
               setConfirmAction(null);
             }}
           >
-            Confirm
+            {confirmAction === 'restart' ? 'Yes, restart' : 'Yes, end'}
           </Button>
         </div>
       </Modal>

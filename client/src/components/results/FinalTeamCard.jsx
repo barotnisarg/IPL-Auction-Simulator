@@ -3,110 +3,147 @@
 import { formatLakhsAsDisplay } from '../../utils/formatCurrency';
 import DownloadPDFButton from './DownloadPDFButton';
 
-const ROLE_DISPLAY_LABELS = {
-  batter: 'Batter',
+const ROLE_LABELS = {
+  batter:        'Batter',
   'all-rounder': 'All-Rounder',
-  bowler: 'Bowler',
-  wicketkeeper: 'Wicketkeeper',
+  bowler:        'Bowler',
+  wicketkeeper:  'Wicketkeeper',
 };
 
-// Mirrored from server/constants/auctionConstants.js — display only.
-// Computed fresh from team.squad here rather than reusing
-// auctionSlice.teamSummaries: that data stops being broadcast the instant
-// AuctionEngine emits 'ended' and is removed from auctionStateStore, so by
-// the time this page renders it would only ever be a frozen, possibly
-// stale snapshot — recomputing from the final persisted squad is simpler
-// and more honestly "final" than trusting a broadcast that already stopped.
-const BOWLING_OPTION_ROLES = ['bowler', 'all-rounder'];
-const MIN_BOWLING_OPTIONS = 5;
-const MIN_WICKETKEEPERS = 1;
-const MAX_SQUAD_SIZE = 11;
+const ROLE_SHORT = {
+  batter:        'BAT',
+  'all-rounder': 'AR',
+  bowler:        'BOWL',
+  wicketkeeper:  'WK',
+};
 
-const RequirementPill = ({ label, current, required }) => {
-  const isMet = current >= required;
+const ROLE_COLOR = {
+  batter:        'text-sky-400 bg-sky-400/10',
+  'all-rounder': 'text-violet-400 bg-violet-400/10',
+  bowler:        'text-emerald-400 bg-emerald-400/10',
+  wicketkeeper:  'text-amber-400 bg-amber-400/10',
+};
+
+const BOWLING_OPTION_ROLES = ['bowler', 'all-rounder'];
+const MIN_BOWLING_OPTIONS  = 5;
+const MIN_WICKETKEEPERS    = 1;
+const MAX_SQUAD_SIZE       = 11;
+
+// A thin pill that turns green when a requirement is met — same pattern
+// as MyTeamPanel so results feel like a natural continuation of the UI
+// you've been staring at during the auction.
+const ReqPill = ({ label, current, required }) => {
+  const met = current >= required;
   return (
-    <span
-      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-        isMet ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-400'
-      }`}
-    >
-      {label}: {current}/{required}
+    <span className={[
+      'rounded-md px-2 py-1 text-xs font-semibold',
+      met ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500',
+    ].join(' ')}>
+      {label} {current}/{required}
     </span>
   );
 };
 
-const FinalTeamCard = ({ team }) => {
-  const ownerName = team.userId?.name || 'Unknown Owner';
-  const totalSpentLakhs = team.squad.reduce((sum, entry) => sum + entry.purchasePriceLakhs, 0);
-  const bowlingOptionsCount = team.squad.filter((entry) =>
-    BOWLING_OPTION_ROLES.includes(entry.role)
-  ).length;
-  const wicketkeeperCount = team.squad.filter((entry) => entry.role === 'wicketkeeper').length;
+const FinalTeamCard = ({ team, isChampion = false }) => {
+  const ownerName        = team.userId?.name ?? 'Unknown';
+  const totalSpentLakhs  = team.squad.reduce((s, e) => s + e.purchasePriceLakhs, 0);
+  const bowlingCount     = team.squad.filter((e) => BOWLING_OPTION_ROLES.includes(e.role)).length;
+  const wkCount          = team.squad.filter((e) => e.role === 'wicketkeeper').length;
+  const squadSize        = team.squad.length;
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-neutral-100">{team.teamName}</h2>
-          <p className="text-sm text-neutral-500">Owner: {ownerName}</p>
+    <div className={[
+      'overflow-hidden rounded-xl border bg-neutral-900',
+      isChampion ? 'border-amber-500/40' : 'border-neutral-800',
+    ].join(' ')}>
+
+      {/* Top accent stripe — amber for champion, subtle for others */}
+      <div className={[
+        'h-px w-full bg-gradient-to-r from-transparent to-transparent',
+        isChampion ? 'via-amber-500/60' : 'via-neutral-700/40',
+      ].join(' ')} />
+
+      {/* Card header */}
+      <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-base font-black text-neutral-100">
+              {team.teamName}
+            </h2>
+            {isChampion && (
+              <span className="shrink-0 rounded-md bg-amber-500/15 px-2 py-0.5 text-xs font-bold text-amber-400">
+                🏆 Top spend
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs text-neutral-600">{ownerName}</p>
         </div>
         <DownloadPDFButton team={team} />
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-neutral-500">Spent</p>
-          <p className="font-mono text-lg font-bold text-amber-400">
-            {formatLakhsAsDisplay(totalSpentLakhs)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-wider text-neutral-500">Remaining</p>
-          <p className="font-mono text-lg font-bold text-neutral-200">
-            {formatLakhsAsDisplay(team.budgetRemainingLakhs)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs uppercase tracking-wider text-neutral-500">Squad</p>
-          <p className="font-mono text-lg font-bold text-neutral-200">
-            {team.squad.length}/{MAX_SQUAD_SIZE}
-          </p>
-        </div>
+      {/* Stats row */}
+      <div className="grid grid-cols-3 divide-x divide-neutral-800 border-t border-neutral-800">
+        {[
+          { label: 'Spent',     value: formatLakhsAsDisplay(totalSpentLakhs),          color: 'text-amber-400' },
+          { label: 'Remaining', value: formatLakhsAsDisplay(team.budgetRemainingLakhs), color: 'text-neutral-300' },
+          { label: 'Squad',     value: `${squadSize}/${MAX_SQUAD_SIZE}`,               color: 'text-neutral-300' },
+        ].map((stat) => (
+          <div key={stat.label} className="px-3 py-3 text-center">
+            <p className={`nums font-mono text-base font-black ${stat.color}`}>
+              {stat.value}
+            </p>
+            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              {stat.label}
+            </p>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <RequirementPill
-          label="Bowling"
-          current={bowlingOptionsCount}
-          required={MIN_BOWLING_OPTIONS}
-        />
-        <RequirementPill label="WK" current={wicketkeeperCount} required={MIN_WICKETKEEPERS} />
+      {/* Requirements */}
+      <div className="flex flex-wrap gap-1.5 border-t border-neutral-800 px-5 py-3">
+        <ReqPill label="Bowling" current={bowlingCount} required={MIN_BOWLING_OPTIONS} />
+        <ReqPill label="WK"      current={wkCount}      required={MIN_WICKETKEEPERS}   />
       </div>
 
-      <h3 className="mt-5 text-xs font-semibold uppercase tracking-widest text-neutral-500">
-        Squad
-      </h3>
+      {/* Squad list */}
+      <div className="border-t border-neutral-800 px-5 pt-4 pb-5">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-neutral-700">
+          Squad ({squadSize}/{MAX_SQUAD_SIZE})
+        </p>
 
-      {team.squad.length === 0 ? (
-        <p className="mt-3 text-sm text-neutral-600">No players purchased.</p>
-      ) : (
-        <ul className="mt-3 space-y-1">
-          {team.squad.map((entry) => (
-            <li
-              key={entry.playerId._id}
-              className="flex items-center justify-between rounded-lg px-3 py-2 text-sm odd:bg-neutral-950"
-            >
-              <div>
-                <p className="font-medium text-neutral-200">{entry.playerId.name}</p>
-                <p className="text-xs text-neutral-500">{ROLE_DISPLAY_LABELS[entry.role]}</p>
-              </div>
-              <span className="font-mono text-neutral-300">
-                {formatLakhsAsDisplay(entry.purchasePriceLakhs)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+        {squadSize === 0 ? (
+          <p className="text-sm text-neutral-700">No players purchased.</p>
+        ) : (
+          <ul className="space-y-1">
+            {team.squad.map((entry, i) => (
+              <li
+                key={entry.playerId._id ?? i}
+                className={[
+                  'flex items-center gap-2.5 rounded-lg px-2.5 py-2',
+                  i % 2 === 0 ? 'bg-neutral-950' : '',
+                ].join(' ')}
+              >
+                {/* Role pill */}
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${ROLE_COLOR[entry.role] ?? 'text-neutral-500 bg-neutral-800'}`}>
+                  {ROLE_SHORT[entry.role] ?? entry.role}
+                </span>
+
+                {/* Name + role */}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-neutral-200">
+                    {entry.playerId.name}
+                  </p>
+                </div>
+
+                {/* Price */}
+                <span className="nums shrink-0 font-mono text-sm font-bold text-amber-400">
+                  {formatLakhsAsDisplay(entry.purchasePriceLakhs)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 };

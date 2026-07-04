@@ -13,33 +13,24 @@ import RoomCodeDisplay from '../components/lobby/RoomCodeDisplay';
 import PlayerList from '../components/lobby/PlayerList';
 import HostControls from '../components/lobby/HostControls';
 
-const ROOM_STATUS_LOBBY = 'lobby'; // mirrored from server/constants/roomConstants.js
+const ROOM_STATUS_LOBBY = 'lobby';
 
 const LobbyPage = () => {
   const { roomCode } = useParams();
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const { socket } = useSocket();
+  const dispatch     = useDispatch();
+  const navigate     = useNavigate();
+  const { socket }   = useSocket();
 
   const { room, status: roomStatus } = useSelector((state) => state.room);
 
-  useEffect(() => {
-    dispatch(fetchRoomByCode(roomCode));
-  }, [roomCode, dispatch]);
+  useEffect(() => { dispatch(fetchRoomByCode(roomCode)); }, [roomCode, dispatch]);
 
   useEffect(() => {
-    if (room?._id) {
-      dispatch(fetchTeamsByRoom(room._id));
-    }
+    if (room?._id) dispatch(fetchTeamsByRoom(room._id));
   }, [room?._id, dispatch]);
 
-  // Registers this socket with the room's broadcast channel. The actual
-  // listeners that react to "someone joined" / "auction started" events
-  // live in sockets/listeners/roomListeners.js — not built yet (Phase 6).
   useEffect(() => {
-    if (socket && roomCode) {
-      socket.emit(ROOM_EVENTS.JOIN, { roomCode });
-    }
+    if (socket && roomCode) socket.emit(ROOM_EVENTS.JOIN, { roomCode });
   }, [socket, roomCode]);
 
   useEffect(() => {
@@ -54,32 +45,46 @@ const LobbyPage = () => {
 
   if (roomStatus === 'failed' && !room) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
-        <p className="text-lg font-semibold text-neutral-100">Room not found.</p>
-        <p className="mt-2 text-sm text-neutral-400">
-          Double check the room code, or ask your host to share it again.
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-2 px-4 text-center">
+        <p className="text-base font-bold text-neutral-100">Room not found.</p>
+        <p className="text-sm text-neutral-500">
+          Double-check the room code, or ask your host to share it again.
         </p>
       </div>
     );
   }
 
-  if (!room) {
-    return null;
-  }
+  if (!room) return null;
 
   return (
-    <div className="mx-auto min-h-screen max-w-3xl px-4 py-10">
-      <p className="text-center text-sm font-semibold uppercase tracking-widest text-amber-400">
-        Lobby
-      </p>
-      <h1 className="mt-2 text-center text-2xl font-bold text-neutral-100">
-        Waiting for the auction to begin
-      </h1>
+    <div className="min-h-dvh bg-neutral-950">
+      {/* Page header */}
+      <header className="border-b border-neutral-900 px-5 py-4">
+        <span className="text-sm font-bold tracking-tight text-neutral-100">
+          Cric<span className="text-amber-400">Bid</span>
+        </span>
+      </header>
 
-      <div className="mt-8 space-y-6">
-        <RoomCodeDisplay />
-        <PlayerList />
-        <HostControls />
+      <div className="mx-auto max-w-xl px-4 py-10">
+        {/* Title */}
+        <div className="text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+            Lobby
+          </span>
+          <h1 className="mt-3 text-xl font-black text-neutral-100">
+            Waiting for the auction to begin
+          </h1>
+          <p className="mt-1.5 text-sm text-neutral-500">
+            Share the room code below so your franchises can join.
+          </p>
+        </div>
+
+        <div className="mt-8 space-y-4">
+          <RoomCodeDisplay />
+          <PlayerList />
+          <HostControls />
+        </div>
       </div>
     </div>
   );

@@ -4,53 +4,67 @@ import { useSelector } from 'react-redux';
 
 const MAX_PLAYERS_PER_ROOM = 5;
 
-const PlayerList = () => {
-  const { teams } = useSelector((state) => state.team);
-  const { room } = useSelector((state) => state.room);
-  const { user } = useSelector((state) => state.auth);
+const CrownIcon = () => (
+  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M5 16l-2-9 6 4 3-6 3 6 6-4-2 9H5zm0 2h14v2H5v-2z" />
+  </svg>
+);
 
-  const emptySlotCount = Math.max(0, MAX_PLAYERS_PER_ROOM - teams.length);
+const PlayerList = () => {
+  const { teams }          = useSelector((state) => state.team);
+  const { room }           = useSelector((state) => state.room);
+  const { user }           = useSelector((state) => state.auth);
+  const emptySlots         = Math.max(0, MAX_PLAYERS_PER_ROOM - teams.length);
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-6">
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-neutral-500">
-          Franchises
-        </h2>
-        <span className="text-sm text-neutral-500">
-          {teams.length} / {MAX_PLAYERS_PER_ROOM}
+        <h2 className="text-sm font-bold text-neutral-100">Franchises</h2>
+        <span className="rounded-md bg-neutral-800 px-2.5 py-0.5 font-mono text-xs font-bold text-neutral-400">
+          {teams.length}/{MAX_PLAYERS_PER_ROOM}
         </span>
       </div>
 
-      <ul className="mt-4 space-y-2">
+      {/* Team rows */}
+      <ul className="mt-3 space-y-1.5">
         {teams.map((team) => {
           const isHost = Boolean(room) && team.userId._id === room.hostUserId;
-          const isMe = Boolean(user) && team.userId._id === user._id;
+          const isMe   = Boolean(user) && team.userId._id === user._id;
 
           return (
             <li
               key={team._id}
-              className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-3"
+              className={[
+                'flex items-center justify-between rounded-lg px-3.5 py-2.5',
+                isMe
+                  ? 'border border-amber-500/20 bg-amber-500/5'
+                  : 'border border-neutral-800 bg-neutral-950',
+              ].join(' ')}
             >
-              <span className="flex items-center gap-2 text-sm font-medium text-neutral-100">
-                {team.teamName}
+              <div className="flex items-center gap-2.5">
+                {/* Initials avatar */}
+                <span className={[
+                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-black',
+                  isMe ? 'bg-amber-500/20 text-amber-400' : 'bg-neutral-800 text-neutral-500',
+                ].join(' ')}>
+                  {team.teamName.charAt(0).toUpperCase()}
+                </span>
+
+                <span className="text-sm font-semibold text-neutral-100">
+                  {team.teamName}
+                </span>
+
                 {isMe && (
-                  <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs font-semibold text-neutral-400">
+                  <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-500">
                     You
                   </span>
                 )}
-              </span>
+              </div>
 
               {isHost && (
-                <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-amber-400">
-                  <svg
-                    className="h-3.5 w-3.5"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 16l-2-9 6 4 3-6 3 6 6-4-2 9H5zm0 2h14v2H5v-2z" />
-                  </svg>
+                <span className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-amber-400">
+                  <CrownIcon />
                   Host
                 </span>
               )}
@@ -58,12 +72,16 @@ const PlayerList = () => {
           );
         })}
 
-        {Array.from({ length: emptySlotCount }).map((_, index) => (
+        {/* Empty slots */}
+        {Array.from({ length: emptySlots }).map((_, i) => (
           <li
-            key={`empty-${index}`}
-            className="rounded-lg border border-dashed border-neutral-800 px-4 py-3 text-sm text-neutral-600"
+            key={`empty-${i}`}
+            className="flex items-center gap-2.5 rounded-lg border border-dashed border-neutral-800 px-3.5 py-2.5"
           >
-            Waiting for a franchise to join...
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-neutral-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-700" />
+            </span>
+            <span className="text-sm text-neutral-700">Waiting for a franchise...</span>
           </li>
         ))}
       </ul>

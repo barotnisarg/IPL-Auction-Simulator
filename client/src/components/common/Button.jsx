@@ -1,16 +1,58 @@
 // client/src/components/common/Button.jsx
 
-const VARIANT_STYLES = {
-  primary: 'bg-amber-500 text-neutral-950 hover:bg-amber-400 focus-visible:ring-amber-300',
-  secondary: 'bg-neutral-800 text-neutral-100 border border-neutral-700 hover:bg-neutral-700 focus-visible:ring-neutral-500',
-  danger: 'bg-red-600 text-white hover:bg-red-500 focus-visible:ring-red-400',
+const VARIANTS = {
+  primary: [
+    'bg-amber-500 text-neutral-950 font-bold',
+    'hover:bg-amber-400',
+    'active:bg-amber-600 active:scale-[0.98]',
+    'focus-visible:ring-amber-400',
+    'disabled:bg-amber-500/30 disabled:text-neutral-950/50',
+  ].join(' '),
+
+  secondary: [
+    'bg-neutral-800 text-neutral-200 font-semibold',
+    'border border-neutral-700',
+    'hover:bg-neutral-700 hover:border-neutral-600',
+    'active:bg-neutral-800 active:scale-[0.98]',
+    'focus-visible:ring-neutral-500',
+    'disabled:opacity-40',
+  ].join(' '),
+
+  danger: [
+    'bg-red-600 text-white font-bold',
+    'hover:bg-red-500',
+    'active:bg-red-700 active:scale-[0.98]',
+    'focus-visible:ring-red-400',
+    'disabled:opacity-40',
+  ].join(' '),
+
+  ghost: [
+    'text-neutral-400 font-semibold',
+    'hover:text-neutral-100 hover:bg-neutral-800',
+    'active:scale-[0.98]',
+    'focus-visible:ring-neutral-500',
+    'disabled:opacity-40',
+  ].join(' '),
 };
 
-const SIZE_STYLES = {
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2 text-base',
-  lg: 'px-6 py-3 text-lg',
+const SIZES = {
+  sm: 'h-8  px-3   text-xs  gap-1.5 rounded-md',
+  md: 'h-10 px-4   text-sm  gap-2   rounded-lg',
+  lg: 'h-11 px-5   text-sm  gap-2   rounded-lg',
+  xl: 'h-13 px-6   text-base gap-2  rounded-lg',
 };
+
+const Spinner = ({ className = 'h-4 w-4' }) => (
+  <svg
+    className={`animate-spin shrink-0 ${className}`}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden="true"
+  >
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+  </svg>
+);
 
 const Button = ({
   children,
@@ -22,38 +64,27 @@ const Button = ({
   onClick,
   className = '',
   ...rest
-}) => {
-  const isDisabled = disabled || isLoading;
+}) => (
+  <button
+    type={type}
+    onClick={onClick}
+    disabled={disabled || isLoading}
+    className={[
+      'inline-flex items-center justify-center',
+      'transition-all duration-150 select-none',
+      'focus-visible:outline-none focus-visible:ring-2',
+      'focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900',
+      'disabled:cursor-not-allowed disabled:pointer-events-none',
+      VARIANTS[variant] ?? VARIANTS.primary,
+      SIZES[size]       ?? SIZES.md,
+      className,
+    ].join(' ')}
+    {...rest}
+  >
+    {isLoading && <Spinner />}
+    {children}
+  </button>
+);
 
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={isDisabled}
-      className={`
-        inline-flex items-center justify-center gap-2 rounded-lg font-semibold
-        transition-colors duration-150
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950
-        disabled:opacity-50 disabled:cursor-not-allowed
-        ${VARIANT_STYLES[variant]}
-        ${SIZE_STYLES[size]}
-        ${className}
-      `.trim().replace(/\s+/g, ' ')}
-      {...rest}
-    >
-      {isLoading && (
-        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-          />
-        </svg>
-      )}
-      {children}
-    </button>
-  );
-};
-
+export { Spinner };
 export default Button;

@@ -2,104 +2,92 @@
 
 import useCountdown from '../../hooks/useCountdown';
 
-const RING_SIZE_PX = { sm: 56, md: 88, lg: 128 };
-const TEXT_SIZE_STYLES = { sm: 'text-lg', md: 'text-3xl', lg: 'text-5xl' };
-const STROKE_WIDTH = 6;
-const URGENT_THRESHOLD_SECONDS = 3;
+const RING_SIZE  = { sm: 52, md: 80, lg: 120 };
+const TEXT_CLASS = { sm: 'text-base', md: 'text-2xl', lg: 'text-4xl' };
+const STROKE     = 5;
+const URGENT_AT  = 3;
 
-const formatAsClock = (seconds) => {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
-};
+const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 const Countdown = ({
   totalSeconds,
-  secondsRemaining: controlledSecondsRemaining,
+  secondsRemaining: controlled,
   isActive = true,
   onExpire,
-  variant = 'ring', // 'ring' | 'text'
+  variant = 'ring',
   label,
   size = 'md',
 }) => {
-  const isControlled =
-    controlledSecondsRemaining !== undefined && controlledSecondsRemaining !== null;
+  const isControlled = controlled !== undefined && controlled !== null;
 
-  // Always called, never conditionally — required by React's rules of
-  // hooks. In controlled mode, isActive is forced false here, so the hook
-  // never starts its own interval and its output is simply never read
-  // below. onExpire is therefore only ever actually invoked in uncontrolled
-  // mode — the controlled (server-authoritative) timer never lets this
-  // component decide its own expiry.
-  const localCountdown = useCountdown({
+  // Always called regardless of mode — hooks must not be conditional.
+  const local = useCountdown({
     durationSeconds: totalSeconds,
     isActive: isActive && !isControlled,
     onExpire,
   });
 
-  const secondsRemaining = isControlled ? controlledSecondsRemaining : localCountdown.secondsRemaining;
-  const clampedSeconds = Math.max(0, secondsRemaining ?? 0);
-  const isUrgent = clampedSeconds > 0 && clampedSeconds <= URGENT_THRESHOLD_SECONDS;
+  const secs   = Math.max(0, (isControlled ? controlled : local.secondsRemaining) ?? 0);
+  const urgent = secs > 0 && secs <= URGENT_AT;
+
+  // Amber normally, red when urgent — matches the existing palette exactly.
+  const numColor  = urgent ? 'text-red-400'   : 'text-amber-400';
+  const arcColor  = urgent ? 'text-red-400'   : 'text-amber-400';
+  const trackColor = urgent ? 'text-red-900/30' : 'text-neutral-800';
 
   if (variant === 'text') {
     return (
       <div className="flex flex-col items-center">
-        <p
-          className={`font-mono font-black tabular-nums ${TEXT_SIZE_STYLES[size]} ${
-            isUrgent ? 'text-red-400' : 'text-neutral-100'
-          }`}
-        >
-          {totalSeconds > 60 ? formatAsClock(clampedSeconds) : clampedSeconds}
+        <p className={`font-mono font-bold nums leading-none ${TEXT_CLASS[size]} ${numColor}`}>
+          {totalSeconds > 60 ? fmt(secs) : secs}
         </p>
         {label && (
-          <p className="mt-1 text-xs uppercase tracking-widest text-neutral-500">{label}</p>
+          <p className="mt-1 text-xs font-medium uppercase tracking-widest text-neutral-500">
+            {label}
+          </p>
         )}
       </div>
     );
   }
 
-  const diameter = RING_SIZE_PX[size];
-  const radius = (diameter - STROKE_WIDTH) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const progress = totalSeconds > 0 ? clampedSeconds / totalSeconds : 0;
-  const dashOffset = circumference * (1 - progress);
+  // Ring variant
+  const d   = RING_SIZE[size];
+  const r   = (d - STROKE) / 2;
+  const c   = 2 * Math.PI * r;
+  const pct = totalSeconds > 0 ? secs / totalSeconds : 0;
 
   return (
     <div className="flex flex-col items-center">
-      <div className="relative" style={{ width: diameter, height: diameter }}>
-        <svg width={diameter} height={diameter} className="-rotate-90">
+      <div className="relative" style={{ width: d, height: d }}>
+        <svg width={d} height={d} className="-rotate-90" aria-hidden="true">
+          {/* Background track */}
           <circle
-            cx={diameter / 2}
-            cy={diameter / 2}
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={STROKE_WIDTH}
-            className="text-neutral-800"
+            cx={d / 2} cy={d / 2} r={r}
+            fill="none" stroke="currentColor"
+            strokeWidth={STROKE}
+            className={trackColor}
           />
+          {/* Progress arc */}
           <circle
-            cx={diameter / 2}
-            cy={diameter / 2}
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={STROKE_WIDTH}
+            cx={d / 2} cy={d / 2} r={r}
+            fill="none" stroke="currentColor"
+            strokeWidth={STROKE}
             strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={dashOffset}
-            className={`transition-all duration-300 ${isUrgent ? 'text-red-400' : 'text-amber-400'}`}
+            strokeDasharray={c}
+            strokeDashoffset={c * (1 - pct)}
+            className={`transition-all duration-500 ease-linear ${arcColor}`}
           />
         </svg>
         <span
-          className={`absolute inset-0 flex items-center justify-center font-mono font-black tabular-nums ${TEXT_SIZE_STYLES[size]} ${
-            isUrgent ? 'text-red-400' : 'text-neutral-100'
-          }`}
+          className={`absolute inset-0 flex items-center justify-center font-mono font-bold nums ${TEXT_CLASS[size]} ${numColor}`}
         >
-          {clampedSeconds}
+          {secs}
         </span>
       </div>
       {label && (
-        <p className="mt-2 text-xs uppercase tracking-widest text-neutral-500">{label}</p>
+        <p className="mt-2 text-xs font-medium uppercase tracking-widest text-neutral-500">
+          {label}
+        </p>
       )}
     </div>
   );

@@ -4,15 +4,15 @@ import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { formatLakhsAsDisplay } from '../../utils/formatCurrency';
 
-const MAX_SQUAD_SIZE = 11;
-const MIN_BOWLING_OPTIONS = 5;
+const MAX_SQUAD_SIZE    = 11;
+const MIN_BOWLING       = 5;
 const MIN_WICKETKEEPERS = 1;
 
-const ROLE_DISPLAY_LABELS = {
-  batter: 'BAT',
+const ROLE_SHORT = {
+  batter:        'BAT',
   'all-rounder': 'AR',
-  bowler: 'BOWL',
-  wicketkeeper: 'WK',
+  bowler:        'BOWL',
+  wicketkeeper:  'WK',
 };
 
 const ROLE_COLOR = {
@@ -24,113 +24,104 @@ const ROLE_COLOR = {
 
 const sameId = (a, b) => {
   if (!a || !b) return false;
-  const sa = typeof a === 'object' ? String(a._id ?? a) : String(a);
-  const sb = typeof b === 'object' ? String(b._id ?? b) : String(b);
-  return sa === sb;
+  const s = (v) => (typeof v === 'object' ? String(v._id ?? v) : String(v));
+  return s(a) === s(b);
 };
 
-const StatPill = ({ label, value, target, met }) => (
-  <div className="flex flex-col items-center rounded-lg bg-neutral-950 px-3 py-2">
-    <span className={`text-sm font-bold ${met ? 'text-emerald-400' : 'text-neutral-200'}`}>
-      {value}
-      {target !== undefined && (
-        <span className="text-xs font-normal text-neutral-500">/{target}</span>
-      )}
-    </span>
-    <span className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">{label}</span>
-  </div>
+const ChevronIcon = ({ open }) => (
+  <svg
+    className={`h-4 w-4 shrink-0 text-neutral-600 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"
+  >
+    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
 );
 
-const TeamCard = ({ team, summary, isCurrentBidder }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const TeamCard = ({ team, summary, isLeading }) => {
+  const [open, setOpen] = useState(false);
 
-  const budget = summary?.budgetRemainingLakhs ?? team.budgetRemainingLakhs ?? 0;
-  const squadSize = summary?.squadSize ?? team.squad.length ?? 0;
-  const bowlingOptions = summary?.bowlingOptionsCount ?? 0;
-  const wicketkeepers = summary?.wicketkeeperCount ?? 0;
-  const slotsLeft = Math.max(0, MAX_SQUAD_SIZE - squadSize);
-  const squad = team.squad ?? [];
+  const budget       = summary?.budgetRemainingLakhs ?? team.budgetRemainingLakhs ?? 0;
+  const squadSize    = summary?.squadSize            ?? team.squad?.length ?? 0;
+  const bowling      = summary?.bowlingOptionsCount  ?? 0;
+  const wk           = summary?.wicketkeeperCount    ?? 0;
+  const slotsLeft    = Math.max(0, MAX_SQUAD_SIZE - squadSize);
+  const squad        = team.squad ?? [];
 
   return (
-    <li className={`rounded-xl border ${isCurrentBidder ? 'border-amber-500/40' : 'border-neutral-800'} bg-neutral-950 overflow-hidden`}>
+    <li className={[
+      'overflow-hidden rounded-lg border transition-colors',
+      isLeading ? 'border-amber-500/30 bg-amber-500/5' : 'border-neutral-800 bg-neutral-950',
+    ].join(' ')}>
 
-      {/* Collapsed header */}
+      {/* Collapsed row */}
       <button
-        onClick={() => setIsOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-neutral-800/40"
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2.5 px-4 py-3 text-left hover:bg-neutral-800/30 active:bg-neutral-800/50"
       >
-        {isCurrentBidder && (
-          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
+        {isLeading && (
+          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400" />
         )}
 
-        <span className={`flex-1 truncate text-sm font-semibold ${isCurrentBidder ? 'text-amber-300' : 'text-neutral-200'}`}>
+        <span className={`flex-1 truncate text-sm font-bold ${isLeading ? 'text-amber-200' : 'text-neutral-200'}`}>
           {team.teamName}
         </span>
 
-        <span className={`shrink-0 font-mono text-sm font-bold ${isCurrentBidder ? 'text-amber-400' : 'text-neutral-300'}`}>
+        <span className={`nums shrink-0 font-mono text-sm font-bold ${isLeading ? 'text-amber-400' : 'text-neutral-400'}`}>
           {formatLakhsAsDisplay(budget)}
         </span>
 
-        <span className="shrink-0 text-xs text-neutral-500">
+        <span className="shrink-0 font-mono text-xs text-neutral-600">
           {squadSize}/{MAX_SQUAD_SIZE}
         </span>
 
-        <span
-          className="shrink-0 text-neutral-600 transition-transform duration-200"
-          style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-        >
-          ▾
-        </span>
+        <ChevronIcon open={open} />
       </button>
 
-      {/* Expanded detail */}
-      {isOpen && (
-        <div className="border-t border-neutral-800 px-4 pb-4 pt-3">
+      {/* Expanded content — animates open */}
+      {open && (
+        <div className="animate-fade-up border-t border-neutral-800 px-4 pb-4 pt-3">
 
-          {/* Stats */}
+          {/* Stat row */}
           <div className="grid grid-cols-3 gap-2">
-            <StatPill label="Budget" value={formatLakhsAsDisplay(budget)} />
-            <StatPill
-              label="Bowling"
-              value={bowlingOptions}
-              target={MIN_BOWLING_OPTIONS}
-              met={bowlingOptions >= MIN_BOWLING_OPTIONS}
-            />
-            <StatPill
-              label="WK"
-              value={wicketkeepers}
-              target={MIN_WICKETKEEPERS}
-              met={wicketkeepers >= MIN_WICKETKEEPERS}
-            />
+            {[
+              { label: 'Budget',   value: formatLakhsAsDisplay(budget) },
+              { label: `Bowl ${bowling}/${MIN_BOWLING}`, value: bowling >= MIN_BOWLING ? '✓' : `${MIN_BOWLING - bowling} more`, ok: bowling >= MIN_BOWLING },
+              { label: `WK ${wk}/${MIN_WICKETKEEPERS}`, value: wk >= MIN_WICKETKEEPERS ? '✓' : 'Need 1', ok: wk >= MIN_WICKETKEEPERS },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-lg bg-neutral-900 px-2 py-2 text-center">
+                <p className={`text-xs font-bold ${stat.ok === true ? 'text-emerald-400' : stat.ok === false ? 'text-red-400' : 'text-neutral-200'}`}>
+                  {stat.value}
+                </p>
+                <p className="mt-0.5 text-[10px] text-neutral-600">{stat.label}</p>
+              </div>
+            ))}
           </div>
 
-          <p className="mt-3 text-xs text-neutral-500">
-            <span className="font-semibold text-neutral-300">{slotsLeft}</span>{' '}
-            slot{slotsLeft !== 1 ? 's' : ''} remaining
+          <p className="mt-2 text-xs text-neutral-600">
+            {slotsLeft} slot{slotsLeft !== 1 ? 's' : ''} remaining
           </p>
 
-          <h4 className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-neutral-600">
+          {/* Squad */}
+          <p className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-neutral-700">
             Squad ({squadSize}/{MAX_SQUAD_SIZE})
-          </h4>
+          </p>
 
           {squad.length === 0 ? (
-            <p className="mt-2 text-xs text-neutral-600">No players purchased yet.</p>
+            <p className="mt-2 text-xs text-neutral-700">No players yet.</p>
           ) : (
-            <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto">
+            <ul className="mt-1.5 max-h-44 space-y-1 overflow-y-auto">
               {squad.map((entry, i) => {
                 const player = entry.playerId;
-                const playerName = player?.name ?? 'Unknown';
-                const playerKey = player?._id ?? `entry-${i}`;
-
                 return (
-                  <li key={playerKey} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${ROLE_COLOR[entry.role] ?? 'text-neutral-400 bg-neutral-700'}`}>
-                      {ROLE_DISPLAY_LABELS[entry.role] ?? entry.role}
+                  <li key={player?._id ?? i} className="flex items-center gap-2 rounded-md px-2 py-1.5">
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${ROLE_COLOR[entry.role] ?? 'text-neutral-500 bg-neutral-800'}`}>
+                      {ROLE_SHORT[entry.role] ?? entry.role}
                     </span>
-                    <span className="flex-1 truncate text-xs font-medium text-neutral-200">
-                      {playerName}
+                    <span className="flex-1 truncate text-xs font-medium text-neutral-300">
+                      {player?.name ?? 'Unknown'}
                     </span>
-                    <span className="shrink-0 font-mono text-xs font-semibold text-amber-400">
+                    <span className="nums shrink-0 font-mono text-xs font-bold text-amber-500">
                       {formatLakhsAsDisplay(entry.purchasePriceLakhs)}
                     </span>
                   </li>
@@ -145,35 +136,30 @@ const TeamCard = ({ team, summary, isCurrentBidder }) => {
 };
 
 const OtherTeamsPanel = () => {
-  const { user } = useSelector((state) => state.auth);
-  const { teams } = useSelector((state) => state.team);
+  const { user }   = useSelector((state) => state.auth);
+  const { teams }  = useSelector((state) => state.team);
   const { teamSummaries, highestBidderTeamId } = useSelector((state) => state.auction);
 
-  const myTeamRecord = teams.find((team) => sameId(team.userId, user?._id));
-  const otherTeams = teams.filter((team) => !sameId(team._id, myTeamRecord?._id));
+  const myTeam     = teams.find((t) => sameId(t.userId, user?._id));
+  const otherTeams = teams.filter((t) => !sameId(t._id, myTeam?._id));
 
   if (otherTeams.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+      <h2 className="text-xs font-bold uppercase tracking-widest text-neutral-600">
         Other Franchises
       </h2>
 
       <ul className="mt-3 space-y-2">
-        {otherTeams.map((team) => {
-          const summary = teamSummaries.find((s) => sameId(s.teamId, team._id));
-          const isCurrentBidder = sameId(team._id, highestBidderTeamId);
-
-          return (
-            <TeamCard
-              key={team._id?.toString()}
-              team={team}
-              summary={summary}
-              isCurrentBidder={isCurrentBidder}
-            />
-          );
-        })}
+        {otherTeams.map((team) => (
+          <TeamCard
+            key={team._id?.toString()}
+            team={team}
+            summary={teamSummaries.find((s) => sameId(s.teamId, team._id))}
+            isLeading={sameId(team._id, highestBidderTeamId)}
+          />
+        ))}
       </ul>
     </div>
   );

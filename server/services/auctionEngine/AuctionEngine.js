@@ -488,49 +488,44 @@ class AuctionEngine extends EventEmitter {
   }
 
   async _enterPool(category) {
-    this.currentCategory = category;
-    this.room.status = category;
-    this.roleBlocks = await playerQueueManager.buildPoolRoleBlocks(
-      category,
-      this._getAuctionedPlayerIds()
-    );
-    this.roleBlockIndex = 0;
-    this.currentRoleSubPhase = this.roleBlocks[0]?.role ?? null;
-    this.room.currentRoleSubPhase = this.currentRoleSubPhase;
+  this.currentCategory = category;
+  this.room.status = category;
+  this.roleBlocks = await playerQueueManager.buildPoolRoleBlocks(
+    category,
+    this._getAuctionedPlayerIds()
+  );
+  this.roleBlockIndex = 0;
+  this.currentRoleSubPhase = this.roleBlocks[0]?.role ?? null;
+  this.room.currentRoleSubPhase = this.currentRoleSubPhase;
 
-    await this.room.save();
-    this.lastCategorySnapshot = this._getCategorySnapshot();
-    this.emit("category-started", this.lastCategorySnapshot);
+  await this.room.save();
 
-    // Self-contained: load the first player with the category intro delay
-    // so the timer only starts after CATEGORY_INTRO_MS.
-    // _advanceToNextPhase does NOT call _loadNextPlayer after this returns.
-    await this._loadNextPlayer({ afterCategoryIntro: true });
-  }
+  // Pass null explicitly so the snapshot is built with NO currently-
+  // auctioning player. At this exact moment this.currentPlayer still
+  // holds the last player from the previous pool — using it as the
+  // fallback in _getCategorySnapshot would cause that player to appear
+  // in the new pool's list with an isCurrentlyAuctioning marker.
+  this.lastCategorySnapshot = this._getCategorySnapshot(null);
+  this.emit("category-started", this.lastCategorySnapshot);
 
-  async _enterNextRoleBlock() {
-    // Moves to the next role sub-phase within the same pool
-    // (e.g. batters → all-rounders → bowlers → wicketkeepers).
-    //
-    // We do NOT emit "category-started" here — that event is reserved for
-    // brand-new categories (Marquee → Pool 1 → Pool 2) and must only
-    // trigger the player-list panel once per pool, not once per role block.
-    // Emitting it here was causing the panel to re-open after every 2-3
-    // players as each role block finished (Bug 2 fix).
-    this.currentRoleSubPhase = this.roleBlocks[this.roleBlockIndex].role;
-    this.room.currentRoleSubPhase = this.currentRoleSubPhase;
+  await this._loadNextPlayer({ afterCategoryIntro: true });
+}
 
-    await this.room.save();
-    // Update lastCategorySnapshot so late-joiners see the correct sub-phase.
-    this.lastCategorySnapshot = this._getCategorySnapshot();
-    // Broadcast updated roleSubPhase label without triggering the panel.
-    this.emit("state-update", this.getStateSnapshot());
+async _enterNextRoleBlock() {
+  this.currentRoleSubPhase = this.roleBlocks[this.roleBlockIndex].role;
+  this.room.currentRoleSubPhase = this.currentRoleSubPhase;
 
-    // Self-contained: no intro delay — users already saw the pool list
-    // when the pool started. _advanceToNextPhase does NOT call
-    // _loadNextPlayer after this returns.
-    await this._loadNextPlayer();
-  }
+  await this.room.save();
+
+  // Pass null explicitly — same reason as _enterPool above.
+  // this.currentPlayer is still the last player from the previous role
+  // block; including it as the fallback would bleed them into the
+  // all-rounders / bowlers / wicketkeepers list they don't belong to.
+  this.lastCategorySnapshot = this._getCategorySnapshot(null);
+  this.emit("state-update", this.getStateSnapshot());
+
+  await this._loadNextPlayer();
+}
 
   async _enterUnsoldSelection() {
     this.currentPlayer = null;
@@ -576,48 +571,44 @@ class AuctionEngine extends EventEmitter {
   }
 
   _getCategorySnapshot(currentlyAuctioning = null) {
-    // Build the player list for the category player-list panel.
-    // For Pool 1/2 we flatten ALL role blocks so the panel shows every
-    // STILL-PENDING player in the full pool, not just the current role
-    // sub-phase. Players already shifted out (resolved, or currently being
-    // auctioned) are NOT in these queues anymore — that's expected, since
-    // the client merges this against its existing roster rather than
-    // replacing it (see applyCategoryStarted in auctionSlice.js).
-    let players = [];
+  let players = [];
 
-    if (
-      this.currentCategory === AUCTION_CATEGORIES.POOL_1 ||
-      this.currentCategory === AUCTION_CATEGORIES.POOL_2
-    ) {
-      if (this.roleBlocks) {
-        players = this.roleBlocks.flatMap((block) =>
-          block.queue.map((p) => this._playerSummary(p))
-        );
-      }
-    } else {
-      players = this.queue.map((p) => this._playerSummary(p));
+  if (
+    this.currentCategory === AUCTION_CATEGORIES.POOL_1 ||
+    this.currentCategory === AUCTION_CATEGORIES.POOL_2
+  ) {
+    if (this.roleBlocks) {
+      players = this.roleBlocks.flatMap((block) =>
+        block.queue.map((p) => this._playerSummary(p))
+      );
     }
-
-    // Explicitly include the player currently up for auction, marked live.
-    // They were already shift()ed out of the queue by this point, so without
-    // this they would be missing from this particular snapshot entirely.
-    const livePlayer = currentlyAuctioning ?? this.currentPlayer;
-    if (livePlayer) {
-      const summary = this._playerSummary(livePlayer);
-      summary.isCurrentlyAuctioning = true;
-      players.push(summary);
-    }
-
-    // Sort alphabetically — never expose the shuffled queue order to clients
-    // (users could predict who's next if the list matched the queue order).
-    players.sort((a, b) => a.name.localeCompare(b.name));
-
-    return {
-      category: this.currentCategory,
-      roleSubPhase: this.currentRoleSubPhase,
-      players,
-    };
+  } else {
+    players = this.queue.map((p) => this._playerSummary(p));
   }
+
+  // Only include the live player marker when currentlyAuctioning is
+  // explicitly provided. We deliberately DO NOT fall back to
+  // this.currentPlayer here — that fallback was the source of the
+  // pool-bleed bug: _enterPool and _enterNextRoleBlock call this method
+  // mid-transition when this.currentPlayer still holds the last player
+  // from the pool/role-block that just finished, causing them to appear
+  // in the next pool's list with isCurrentlyAuctioning: true.
+  // _emitCategoryUpdate always passes the correct next player explicitly,
+  // so the fallback is never needed in practice.
+  if (currentlyAuctioning) {
+    const summary = this._playerSummary(currentlyAuctioning);
+    summary.isCurrentlyAuctioning = true;
+    players.push(summary);
+  }
+
+  players.sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    category: this.currentCategory,
+    roleSubPhase: this.currentRoleSubPhase,
+    players,
+  };
+}
 
   _playerSummary(player) {
     return {

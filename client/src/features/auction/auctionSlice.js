@@ -53,8 +53,6 @@ const auctionSlice = createSlice({
       state.secondsRemaining = payload.secondsRemaining;
       state.isPaused = payload.isPaused;
       state.teamSummaries = payload.teams;
-      // Reset to [] when a new player loads (skippedTeamIds is empty in
-      // that STATE_UPDATE); grows as teams skip the current player.
       state.skippedTeamIds = payload.skippedTeamIds ?? [];
     },
 
@@ -69,39 +67,47 @@ const auctionSlice = createSlice({
       const isNewCategory = state.activeCategoryPlayers?.category !== category;
 
       if (isNewCategory) {
-        // Brand-new pool/set — full reset. These are genuinely different
-        // players from a different pool, so replacing is correct here.
+        // Brand-new pool/set — full reset of both the player roster AND
+        // the outcome map. Keeping the old pool's playerOutcomeMap entries
+        // alive across a pool transition meant stale isCurrentlyAuctioning
+        // markers from the last player of Pool 1 could survive into Pool 2
+        // if a race between the reset emit and the first-player emit left
+        // an orphaned entry in the map. Clearing it here is safe because
+        // the new pool's players have not been resolved yet by definition.
         state.activeCategoryPlayers = {
           category,
           roleSubPhase,
           players: incomingPlayers,
         };
+        // Clear the outcome map so no Pool 1 player's sold/unsold entry
+        // can leak into the Pool 2 panel via the merge path.
+        state.playerOutcomeMap = {};
         return;
       }
 
-      // Same category as before — MERGE instead of replace.
-      // The server's per-player update only includes still-pending players
-      // plus the one currently live; it does NOT re-send players who already
-      // sold/went unsold earlier in this pool (they were already shifted out
-      // of its internal queue). Replacing the list wholesale would silently
-      // drop every already-resolved player from the panel the moment the
-      // next player's update arrives — that was the "player disappears after
-      // their auction finishes" bug. Merging by _id keeps everyone visible
-      // for the entire pool; sold/unsold status comes separately from
-      // playerOutcomeMap and is unaffected by this merge.
+      // Same category — MERGE into existing roster instead of replacing.
+      // The server sends only pending players + the live one; players who
+      // already finished are not re-sent (they were shifted out of the
+      // server's internal queue). A wholesale replace would drop every
+      // already-resolved player from the panel the instant the next
+      // player's update arrives.
       const existingById = new Map(
-        (state.activeCategoryPlayers?.players ?? []).map((p) => [p._id?.toString(), p])
+        (state.activeCategoryPlayers?.players ?? []).map((p) => [
+          p._id?.toString(),
+          p,
+        ])
       );
 
       for (const incoming of incomingPlayers) {
         existingById.set(incoming._id?.toString(), incoming);
       }
 
-      // Only the player marked live in THIS incoming batch should stay
-      // marked live — clear the flag on everyone else (e.g. the previous
-      // player, now resolved, should lose their "Live" badge).
+      // Only the player explicitly marked live in this batch should carry
+      // the isCurrentlyAuctioning flag — clear it on everyone else so the
+      // previous player's Live badge doesn't persist after they resolve.
       const incomingLiveId = incomingPlayers
-        .find((p) => p.isCurrentlyAuctioning)?._id?.toString();
+        .find((p) => p.isCurrentlyAuctioning)
+        ?._id?.toString();
 
       const mergedPlayers = Array.from(existingById.values())
         .map((p) => ({

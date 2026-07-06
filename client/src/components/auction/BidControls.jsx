@@ -17,17 +17,13 @@ const BID_INCREMENT_TIERS = [
   { upToLakhs: null, incrementLakhs: 100 },
 ];
 
-const getIncrementForBid = (lakhs) => {
-  const tier = BID_INCREMENT_TIERS.find(
-    (t) => t.upToLakhs === null || lakhs < t.upToLakhs
-  );
-  return tier.incrementLakhs;
-};
+const getIncrementForBid = (lakhs) =>
+  BID_INCREMENT_TIERS.find((t) => t.upToLakhs === null || lakhs < t.upToLakhs).incrementLakhs;
 
-const calculateNextBidLakhs = (currentBidLakhs, basePriceLakhs) => {
-  if (currentBidLakhs === null || currentBidLakhs === undefined) return basePriceLakhs;
-  return currentBidLakhs + getIncrementForBid(currentBidLakhs);
-};
+const calculateNextBidLakhs = (currentBidLakhs, basePriceLakhs) =>
+  currentBidLakhs === null || currentBidLakhs === undefined
+    ? basePriceLakhs
+    : currentBidLakhs + getIncrementForBid(currentBidLakhs);
 
 const SUBMIT_LOCK_MS = 600;
 
@@ -37,14 +33,11 @@ const sameId = (a, b) => {
   return s(a) === s(b);
 };
 
-// compact prop: true when rendered inside the mobile sticky bottom bar.
-// In compact mode we strip the wrapper card since the bar itself provides
-// the surface — avoids double borders / double padding on mobile.
 const BidControls = ({ compact = false }) => {
-  const { socket }  = useSocket();
-  const { room }    = useSelector((state) => state.room);
-  const { user }    = useSelector((state) => state.auth);
-  const { teams }   = useSelector((state) => state.team);
+  const { socket } = useSocket();
+  const { room }   = useSelector((s) => s.room);
+  const { user }   = useSelector((s) => s.auth);
+  const { teams }  = useSelector((s) => s.team);
   const {
     currentPlayer,
     currentBidLakhs,
@@ -52,9 +45,12 @@ const BidControls = ({ compact = false }) => {
     teamSummaries,
     skippedTeamIds,
     isPaused,
-  } = useSelector((state) => state.auction);
+  } = useSelector((s) => s.auction);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Brief visual press state — gives tactile feedback on the bid button
+  // beyond just the active: scale, so users know the tap registered.
+  const [justBid, setJustBid] = useState(false);
 
   const myTeamRecord = teams.find((t) => sameId(t.userId, user?._id));
   const mySummary    = teamSummaries.find((s) => sameId(s.teamId, myTeamRecord?._id));
@@ -65,38 +61,41 @@ const BidControls = ({ compact = false }) => {
 
   if (!room || !currentPlayer || !myTeamRecord) return null;
 
-  const myTeamId       = myTeamRecord._id?.toString();
+  const myTeamId        = myTeamRecord._id?.toString();
   const isHighestBidder = sameId(highestBidderTeamId, myTeamRecord._id);
-  const isSquadFull    = squadSize >= MAX_SQUAD_SIZE;
-  const nextBidLakhs   = calculateNextBidLakhs(currentBidLakhs, currentPlayer.basePriceLakhs);
-  const canAfford      = budgetRemainingLakhs >= nextBidLakhs;
-  const iHaveSkipped   = skippedTeamIds.includes(myTeamId);
-  const skipCount      = skippedTeamIds.length;
+  const isSquadFull     = squadSize >= MAX_SQUAD_SIZE;
+  const nextBidLakhs    = calculateNextBidLakhs(currentBidLakhs, currentPlayer.basePriceLakhs);
+  const canAfford       = budgetRemainingLakhs >= nextBidLakhs;
+  const iHaveSkipped    = skippedTeamIds.includes(myTeamId);
+  const skipCount       = skippedTeamIds.length;
 
   const canBid  = !isPaused && !isHighestBidder && !isSquadFull && canAfford && !isSubmitting;
   const canSkip = !isPaused && !isHighestBidder && !iHaveSkipped && !isSubmitting;
 
   const emitAndLock = (event) => {
+    if (event === AUCTION_EVENTS.PLACE_BID) {
+      setJustBid(true);
+      setTimeout(() => setJustBid(false), 600);
+    }
     setIsSubmitting(true);
     socket.emit(event, { roomCode: room.roomCode });
     setTimeout(() => setIsSubmitting(false), SUBMIT_LOCK_MS);
   };
 
   const disabledReason = (() => {
-    if (isPaused)         return 'Auction is paused.';
-    if (isHighestBidder)  return "You're the highest bidder.";
-    if (isSquadFull)      return `Squad full (${MAX_SQUAD_SIZE} players).`;
-    if (!canAfford)       return 'Insufficient budget.';
+    if (isPaused)        return 'Auction is paused.';
+    if (isHighestBidder) return "You're the highest bidder.";
+    if (isSquadFull)     return `Squad full (${MAX_SQUAD_SIZE} players).`;
+    if (!canAfford)      return 'Insufficient budget.';
     return null;
   })();
 
   const inner = (
     <>
-      {/* Next bid label — compact mode shows it inline with budget */}
       {compact ? (
         <div className="mb-2 flex items-center justify-between text-xs">
           <span className="font-medium text-neutral-500">
-            Budget left:{' '}
+            Budget:{' '}
             <span className="nums font-mono font-bold text-neutral-300">
               {formatLakhsAsDisplay(budgetRemainingLakhs)}
             </span>
@@ -117,13 +116,16 @@ const BidControls = ({ compact = false }) => {
         </div>
       )}
 
-      {/* Bid + Skip buttons */}
       <div className="flex gap-2">
+        {/* Bid button — scale pulse confirms the tap registered */}
         <Button
           onClick={() => emitAndLock(AUCTION_EVENTS.PLACE_BID)}
           disabled={!canBid}
           size={compact ? 'md' : 'lg'}
-          className="flex-1"
+          className={[
+            'flex-1 transition-transform',
+            justBid ? 'scale-95' : 'scale-100',
+          ].join(' ')}
         >
           Bid {formatLakhsAsDisplay(nextBidLakhs)}
         </Button>
@@ -146,12 +148,9 @@ const BidControls = ({ compact = false }) => {
         </div>
       </div>
 
-      {/* Reason + skip info */}
       {(disabledReason || skipCount > 0) && (
         <div className="mt-2 space-y-0.5 text-center">
-          {disabledReason && (
-            <p className="text-xs text-neutral-600">{disabledReason}</p>
-          )}
+          {disabledReason && <p className="text-xs text-neutral-600">{disabledReason}</p>}
           {skipCount > 0 && (
             <p className="text-xs text-red-500">
               {skipCount} {skipCount === 1 ? 'team has' : 'teams have'} skipped
@@ -162,10 +161,8 @@ const BidControls = ({ compact = false }) => {
     </>
   );
 
-  // Compact mode: no wrapper card — the sticky bar in AuctionPage is the surface.
   if (compact) return <div>{inner}</div>;
 
-  // Desktop: full card wrapper.
   return (
     <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
       {inner}

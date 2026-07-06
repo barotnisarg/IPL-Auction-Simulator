@@ -11,8 +11,12 @@ const ROLE_LABELS = {
 };
 
 // ── Auction log row ───────────────────────────────────────────────────────────
-const AuctionHistoryRow = ({ entry }) => (
-  <li className="flex items-center justify-between rounded-lg px-3 py-2">
+const AuctionHistoryRow = ({ entry, index }) => (
+  // animate-row-enter + delay based on position so rows cascade in
+  <li
+    className="flex items-center justify-between rounded-lg px-3 py-2 animate-row-enter"
+    style={{ animationDelay: `${index * 40}ms` }}
+  >
     <div className="min-w-0">
       <p className="truncate text-sm font-semibold text-neutral-200">{entry.player.name}</p>
       <p className="text-xs text-neutral-600">{ROLE_LABELS[entry.player.role]}</p>
@@ -25,14 +29,12 @@ const AuctionHistoryRow = ({ entry }) => (
         <p className="max-w-[80px] truncate text-xs text-neutral-500">{entry.team.teamName}</p>
       </div>
     ) : (
-      <span className="ml-3 shrink-0 text-xs font-semibold text-neutral-700">
-        Unsold
-      </span>
+      <span className="ml-3 shrink-0 text-xs font-semibold text-neutral-700">Unsold</span>
     )}
   </li>
 );
 
-// ── Per-team highest bid leaderboard ──────────────────────────────────────────
+// ── Team bid leaderboard ──────────────────────────────────────────────────────
 const TeamBidLeaderboard = () => {
   const { currentPlayerBidLog, highestBidderTeamId, currentPlayer } =
     useSelector((s) => s.auction);
@@ -46,7 +48,6 @@ const TeamBidLeaderboard = () => {
     );
   }
 
-  // Highest bid per team
   const highestByTeam = new Map();
   for (const entry of currentPlayerBidLog) {
     const tid = entry.teamId?.toString();
@@ -58,7 +59,11 @@ const TeamBidLeaderboard = () => {
 
   const bidders = teams
     .filter((t) => highestByTeam.has(t._id?.toString()))
-    .map((t) => ({ teamId: t._id?.toString(), teamName: t.teamName, highestBid: highestByTeam.get(t._id?.toString()) }))
+    .map((t) => ({
+      teamId: t._id?.toString(),
+      teamName: t.teamName,
+      highestBid: highestByTeam.get(t._id?.toString()),
+    }))
     .sort((a, b) => b.highestBid - a.highestBid);
 
   const nonBidders = teams.filter((t) => !highestByTeam.has(t._id?.toString()));
@@ -76,13 +81,15 @@ const TeamBidLeaderboard = () => {
       {bidders.map(({ teamId, teamName, highestBid }, i) => {
         const isWinner = teamId === highestBidderTeamId?.toString();
         return (
+          // key includes highestBid so the element re-mounts (re-animates)
+          // each time this team's top bid increases.
           <li
-            key={teamId}
+            key={`${teamId}-${highestBid}`}
             className={[
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm',
-              'transition-colors',
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm animate-row-enter',
               isWinner ? 'bg-amber-500/10 ring-1 ring-amber-500/25' : 'bg-neutral-800/30',
             ].join(' ')}
+            style={{ animationDelay: `${i * 40}ms` }}
           >
             <span className={`w-5 shrink-0 text-center font-mono text-xs font-black ${i === 0 ? 'text-amber-400' : 'text-neutral-600'}`}>
               #{i + 1}
@@ -116,8 +123,7 @@ const TeamBidLeaderboard = () => {
 const HistoryPanel = ({ type = 'bid' }) => {
   const { auctionHistory } = useSelector((state) => state.auction);
   const isBidMode = type === 'bid';
-
-  const entries = [...auctionHistory].reverse();
+  const entries   = [...auctionHistory].reverse();
 
   return (
     <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
@@ -134,7 +140,7 @@ const HistoryPanel = ({ type = 'bid' }) => {
       ) : (
         <ul className="mt-2 max-h-64 space-y-0.5 overflow-y-auto">
           {entries.map((entry, i) => (
-            <AuctionHistoryRow key={`${entry.player._id}-${i}`} entry={entry} />
+            <AuctionHistoryRow key={`${entry.player._id}-${i}`} entry={entry} index={i} />
           ))}
         </ul>
       )}

@@ -6,6 +6,8 @@ import { useSelector } from 'react-redux';
 import { formatLakhsAsDisplay } from '../../utils/formatCurrency';
 import Countdown from '../common/Countdown';
 import BidControls from './BidControls';
+import SoldImpactEffect from './SoldImpactEffect';
+import useCountUp from '../../hooks/useCountUp';
 
 const BID_TIMER_SECONDS = 7;
 
@@ -39,13 +41,26 @@ const PlayerSilhouette = () => (
   </svg>
 );
 
-// The SOLD/UNSOLD stamp — the one moment that gets the stamp-in animation.
-// Intentionally dramatic: rotated, large type, high contrast.
+// The SOLD/UNSOLD stamp. SOLD gets the full treatment: the price counts up
+// from zero via useCountUp instead of just appearing, landing on the final
+// figure right as the confetti settles. UNSOLD stays deliberately quiet —
+// no count-up, no confetti — so the contrast makes SOLD feel like the win
+// it actually is.
 const OutcomeStamp = ({ outcome }) => {
-  if (outcome.type === 'sold') {
+  const isSold = outcome.type === 'sold';
+
+  // Called unconditionally regardless of branch — hooks can't be conditional.
+  // isActive: false in the unsold branch makes it resolve to 0 immediately,
+  // which is simply never rendered on that path.
+  const animatedPriceLakhs = useCountUp({
+    to: isSold ? outcome.priceLakhs : 0,
+    durationMs: 900,
+    isActive: isSold,
+  });
+
+  if (isSold) {
     return (
       <div className="flex flex-col items-center gap-1 animate-stamp-in">
-        {/* Stamp border mimics a real rubber stamp */}
         <div className="rounded-lg border-4 border-amber-400 px-6 py-3 text-center shadow-[4px_4px_0_0_rgba(0,0,0,0.5)]">
           <p className="font-mono text-xs font-black uppercase tracking-[0.3em] text-amber-400">
             Sold
@@ -54,7 +69,7 @@ const OutcomeStamp = ({ outcome }) => {
             {outcome.player.name}
           </p>
           <p className="nums mt-1 font-mono text-3xl font-black text-amber-400">
-            {formatLakhsAsDisplay(outcome.priceLakhs)}
+            {formatLakhsAsDisplay(Math.round(animatedPriceLakhs))}
           </p>
         </div>
         <p className="mt-2 text-xs font-semibold uppercase tracking-widest text-neutral-500">to</p>
@@ -149,8 +164,13 @@ const AuctionPlayerCard = () => {
     );
   }
 
+  const isSoldOutcome = visibleOutcome?.type === 'sold';
+
   return (
-    <div className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
+    // 'relative' is required here — both the outcome overlay and
+    // SoldImpactEffect are position:absolute and need this as their
+    // containing block, otherwise they'd escape to cover the whole page.
+    <div className="relative overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
       {/* Thin top accent — only when live */}
       <div className="h-px w-full bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
 
@@ -241,8 +261,16 @@ const AuctionPlayerCard = () => {
 
       {/* ── Outcome overlay ── */}
       {visibleOutcome && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-neutral-950/95">
-          <OutcomeStamp outcome={visibleOutcome} />
+        <div
+          className={`absolute inset-0 z-10 flex items-center justify-center bg-neutral-950/95 ${isSoldOutcome ? 'animate-impact-shake' : ''}`}
+        >
+          {/* Confetti + shockwave + screen flash — SOLD only */}
+          {isSoldOutcome && <SoldImpactEffect />}
+
+          {/* z-10 guarantees the stamp text renders above the confetti layer */}
+          <div className="relative z-10">
+            <OutcomeStamp outcome={visibleOutcome} />
+          </div>
         </div>
       )}
     </div>

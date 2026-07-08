@@ -16,3 +16,16 @@ export const getCurrentUser = async () => {
   const response = await axiosInstance.get('/auth/me');
   return response.data;
 };
+
+export const forgotPasswordApi = async ({ email }) => {
+  const response = await axiosInstance.post('/auth/forgot-password', { email });
+  return response.data;
+};
+
+export const resetPasswordApi = async ({ token, password, confirmPassword }) => {
+  const response = await axiosInstance.post(`/auth/reset-password/${token}`, {
+    password,
+    confirmPassword,
+  });
+  return response.data;
+};

@@ -71,9 +71,18 @@ const LoginPage = () => {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-semibold text-neutral-300">
-                  Password
-                </label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="block text-sm font-semibold text-neutral-300">
+                    Password
+                  </label>
+                  {/* Forgot password link — sits inline with the label */}
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs font-medium text-amber-400 hover:text-amber-300"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <input
                   id="password"
                   type="password"

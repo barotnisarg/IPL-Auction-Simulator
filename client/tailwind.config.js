@@ -52,35 +52,19 @@ export default {
           '0%, 100%': { opacity: '1' },
           '50%':      { opacity: '0.7' },
         },
-
-        // ── New — SOLD Impact Sequence ───────────────────────────────────
-        // A single confetti particle's fall. Each particle sets its own
-        // --fall-y, --spin, --drift-x custom properties inline so ~50
-        // particles all look randomized while sharing one keyframe.
         confettiFall: {
-          '0%': {
-            transform: 'translate(0, 0) rotate(0deg)',
-            opacity: '1',
-          },
-          '80%': {
-            opacity: '1',
-          },
-          '100%': {
-            transform: 'translate(var(--drift-x, 0), var(--fall-y, 300px)) rotate(var(--spin, 360deg))',
-            opacity: '0',
-          },
+          '0%':   { transform: 'translate(0, 0) rotate(0deg)', opacity: '1' },
+          '80%':  { opacity: '1' },
+          '100%': { transform: 'translate(var(--drift-x, 0), var(--fall-y, 300px)) rotate(var(--spin, 360deg))', opacity: '0' },
         },
-        // Expanding ring — the "impact" shockwave radiating from the stamp.
         shockwave: {
           '0%':   { transform: 'scale(0.3)', opacity: '0.7', borderWidth: '3px' },
           '100%': { transform: 'scale(2.6)', opacity: '0',   borderWidth: '0.5px' },
         },
-        // Full-card radial flash — the punch behind the stamp landing.
         screenFlash: {
           '0%':   { opacity: '0.55' },
           '100%': { opacity: '0' },
         },
-        // Sharper than timerShake — a real "impact" jolt, used once on landing.
         impactShake: {
           '0%, 100%': { transform: 'translate(0, 0)' },
           '15%':      { transform: 'translate(-4px, 1px) rotate(-0.5deg)' },
@@ -88,6 +72,16 @@ export default {
           '45%':      { transform: 'translate(-3px, 1px)' },
           '60%':      { transform: 'translate(3px, -1px)' },
           '75%':      { transform: 'translate(-1px, 0)' },
+        },
+
+        // ── New — emoji reaction float ─────────────────────────────────
+        // Each reaction floats straight up, grows slightly, then fades.
+        // Horizontal drift is randomized via --drift-x set inline per instance.
+        floatUp: {
+          '0%':   { transform: 'translate(var(--drift-x, 0), 0) scale(0.6)', opacity: '0' },
+          '15%':  { opacity: '1', transform: 'translate(var(--drift-x, 0), -20px) scale(1.25)' },
+          '70%':  { opacity: '1' },
+          '100%': { transform: 'translate(var(--drift-x, 0), -140px) scale(0.9)', opacity: '0' },
         },
       },
       animation: {
@@ -101,15 +95,17 @@ export default {
         'row-enter':   'rowEnter 250ms ease-out both',
         'num-pop':     'numPop 400ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both',
         'ticker':      'ticker 2400ms ease-in-out infinite',
-
-        // ── New ───────────────────────────────────────────────────────────
-        // Duration is intentionally randomized per-particle via inline style
-        // (animationDuration), so this base duration is just a fallback.
         'confetti-fall': 'confettiFall 1400ms cubic-bezier(0.15, 0.5, 0.4, 1) both',
-        // Three rings stagger their delay in the component itself.
         'shockwave':     'shockwave 700ms cubic-bezier(0.15, 0.6, 0.4, 1) both',
         'screen-flash':  'screenFlash 350ms ease-out both',
         'impact-shake':  'impactShake 380ms ease-in-out both',
+
+        // ── New ───────────────────────────────────────────────────────────
+        // 2200ms total — pop in quickly (15%), float up, then fade in the
+        // top third. Duration is slightly randomized per-instance via
+        // inline animationDuration so simultaneous reactions don't feel
+        // perfectly synchronised.
+        'float-up': 'floatUp 2200ms cubic-bezier(0.2, 0.8, 0.4, 1) both',
       },
     },
   },

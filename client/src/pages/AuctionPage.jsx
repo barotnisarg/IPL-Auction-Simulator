@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 
 import useAuctionRoom from '../hooks/useAuctionRoom';
+import useReactions from '../hooks/useReactions';
 import Loader from '../components/common/Loader';
 import HostControls from '../components/lobby/HostControls';
 import AuctionPlayerCard from '../components/auction/AuctionPlayerCard';
@@ -15,6 +16,8 @@ import OtherTeamsPanel from '../components/auction/OtherTeamsPanel';
 import CategoryPlayerListPanel, {
   CategoryListButton,
 } from '../components/auction/CategoryPlayerListPanel';
+import EmojiReactionBar from '../components/auction/EmojiReactionBar';
+import EmojiReactionOverlay from '../components/auction/EmojiReactionOverlay';
 
 const CATEGORY_INTRO_MS = 5000;
 
@@ -22,9 +25,9 @@ const AuctionPage = () => {
   const { roomCode } = useParams();
   const { room, roomStatus } = useAuctionRoom(roomCode);
 
-  const [isPanelOpen, setIsPanelOpen]           = useState(false);
+  // ── Category panel ────────────────────────────────────────────────────
+  const [isPanelOpen, setIsPanelOpen]               = useState(false);
   const [autoCloseCountdown, setAutoCloseCountdown] = useState(null);
-
   const autoCloseTimerRef    = useRef(null);
   const countdownIntervalRef = useRef(null);
 
@@ -33,7 +36,6 @@ const AuctionPage = () => {
 
   useEffect(() => {
     if (!categoryKey) return;
-
     clearTimeout(autoCloseTimerRef.current);
     clearInterval(countdownIntervalRef.current);
 
@@ -66,6 +68,15 @@ const AuctionPage = () => {
     setAutoCloseCountdown(null);
   };
 
+  // ── Emoji reactions ───────────────────────────────────────────────────
+  const { reactions, emitReaction } = useReactions();
+
+  const handleReact = (emoji) => {
+    if (!room?.roomCode) return;
+    emitReaction(emoji, room.roomCode);
+  };
+
+  // ── Loading / error states ────────────────────────────────────────────
   if (roomStatus === 'loading' && !room) {
     return <Loader fullScreen label="Loading auction..." />;
   }
@@ -84,17 +95,18 @@ const AuctionPage = () => {
   if (!room) return null;
 
   return (
-    // Extra bottom padding on mobile so the sticky BidControls bar
-    // doesn't overlap the last card in the scroll.
     <div className="min-h-dvh bg-neutral-950 pb-32 md:pb-6">
-      {/* Category player list panel — full-screen overlay */}
+      {/* Floating emoji reactions — fixed overlay, above everything */}
+      <EmojiReactionOverlay reactions={reactions} />
+
+      {/* Category player list panel */}
       <CategoryPlayerListPanel
         isOpen={isPanelOpen}
         onClose={handleClosePanel}
         autoCloseCountdown={autoCloseCountdown}
       />
 
-      {/* ── Top bar ── */}
+      {/* ── Sticky top bar ── */}
       <header className="sticky top-0 z-30 border-b border-neutral-900 bg-neutral-950/90 px-4 py-3 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <span className="text-sm font-bold tracking-tight text-neutral-100">
@@ -111,14 +123,13 @@ const AuctionPage = () => {
       <main className="mx-auto max-w-6xl px-4 pt-5">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 
-          {/* Left column: player card + history */}
+          {/* Left: player card + history */}
           <div className="space-y-4 lg:col-span-2">
             <AuctionPlayerCard />
             <HistoryPanel type="bid" />
           </div>
 
-          {/* Right column: my team + others + auction log
-              Hidden on mobile — accessible by scrolling below the sticky bar */}
+          {/* Right: my team + others + log */}
           <div className="space-y-4">
             <MyTeamPanel />
             <OtherTeamsPanel />
@@ -127,19 +138,25 @@ const AuctionPage = () => {
         </div>
       </main>
 
-      {/* ── Sticky bottom bid bar (mobile only) ──
-          On desktop BidControls renders inline inside the card.
-          On mobile it sticks to the bottom so the user never has to scroll
-          to place a bid — the most critical action in the whole app. */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-950/95 px-4 pb-safe pt-3 backdrop-blur-sm md:hidden">
-        <BidControls compact />
+      {/* ── Mobile sticky bottom bar ── */}
+      {/* Contains BidControls + EmojiReactionBar side by side.
+          On desktop, BidControls renders inline inside AuctionPlayerCard
+          and EmojiReactionBar sits in the main content area below the card. */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-950/95 px-4 pb-safe backdrop-blur-sm md:hidden">
+        <div className="flex items-end gap-2 pt-2 pb-3">
+          <div className="flex-1">
+            <BidControls compact />
+          </div>
+          <div className="shrink-0 pb-0.5">
+            <EmojiReactionBar onReact={handleReact} />
+          </div>
+        </div>
       </div>
 
-      {/* Desktop inline bid controls — hidden on mobile (handled above) */}
+      {/* Desktop: EmojiReactionBar below the player card */}
       <div className="mx-auto hidden max-w-6xl px-4 md:block">
-        <div className="mt-4 lg:col-span-2">
-          {/* Intentionally rendered outside the grid on desktop so it
-              doesn't need a wrapper element that disrupts grid layout */}
+        <div className="mt-4 lg:w-2/3">
+          <EmojiReactionBar onReact={handleReact} />
         </div>
       </div>
     </div>

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0a0f1a"/>
+    </linearGradient>
+    <linearGradient id="handle" x1="23" y1="47" x2="41" y2="21" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c2410c"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <radialGradient id="ball" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#fb923c"/>
+      <stop offset="1" stop-color="#b45309"/>
+    </radialGradient>
+  </defs>
+
+  <!-- background -->
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#bg)" stroke="#f59e0b" stroke-opacity="0.18" stroke-width="1.5"/>
+
+  <!-- gavel sound block -->
+  <rect x="17" y="45" width="27" height="7" rx="3" fill="#334155"/>
+
+  <!-- gavel handle -->
+  <line x1="23" y1="46" x2="41" y2="22" stroke="url(#handle)" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- gavel head, stylized as a cricket ball -->
+  <circle cx="42" cy="20" r="11" fill="url(#ball)"/>
+  <path d="M 33 15 Q 42 22 50 25" stroke="#fef3c7" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.85"/>
+  <line x1="36.5" y1="17" x2="38" y2="19.3" stroke="#fef3c7" stroke-width="1.1" stroke-linecap="round" opacity="0.7"/>
+  <line x1="44" y1="22.5" x2="45.5" y2="24.8" stroke="#fef3c7" stroke-width="1.1" stroke-linecap="round" opacity="0.7"/>
+  <ellipse cx="38" cy="16" rx="3" ry="2" fill="#ffffff" opacity="0.25"/>
+</svg>
